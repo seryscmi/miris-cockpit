@@ -1194,7 +1194,7 @@ function viewSettings(app){
   wrap.appendChild(el('<p class="muted tiny" style="margin-top:16px;text-align:center">M.IRIS Cockpit · Speicher: '+(Store.available?"localStorage":"nur Arbeitsspeicher (Achtung: nicht dauerhaft)")+' · Schema v'+SCHEMA_VERSION+'</p>'));
   app.appendChild(wrap);
 }
-function field(label,inner){ return '<label class="field"><span>'+esc(label)+'</span>'+inner+'</label>'; }
+function field(label,inner){ return el('<label class="field"><span>'+esc(label)+'</span>'+inner+'</label>'); }
 
 /* ---------- Backup ---------- */
 function exportBackup(){
