@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="M.IRIS Cockpit">
+<meta name="theme-color" content="#efefef">
+<title>M.IRIS Cockpit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20fill='%23efefef'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='30'%20fill='none'%20stroke='%231c1c1c'%20stroke-width='6'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='11'%20fill='%231c1c1c'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20fill='%231c1c1c'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='30'%20fill='none'%20stroke='%23efefef'%20stroke-width='6'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='11'%20fill='%23efefef'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#1c1c1c; --ink2:#5a5a5a; --paper:#efefef; --surface:#ffffff; --surface2:#e6e6e6;
+  --line:#d4d4d4; --line2:#c2c2c2;
+  --accent:#1c1c1c;
+  --warn:#b8860b; --warn-bg:#f6edd4;
+  --danger:#a33131; --danger-bg:#f3dede;
+  --ok:#2f6b46; --ok-bg:#dcecdf;
+  --info:#3a5a78; --info-bg:#dde6ee;
+  --muted:#7a7a7a; --muted-bg:#e2e2e2;
+  --topbar-h:56px; --nav-h:60px;
+  --serif:"Bodoni Moda","Bodoni 72",Didot,"Playfair Display",Georgia,"Times New Roman",serif;
+  --sans:"Nunito","Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--sans); background:var(--paper); color:var(--ink);
+  min-height:100vh; min-height:100dvh; line-height:1.45;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+body.no-scroll{overflow:hidden}
+button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
+a{color:inherit}
+h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:1.2}
+.serif{font-family:var(--serif)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+/* ---------- Layout shell ---------- */
+#topbar{
+  position:sticky; top:0; z-index:40; height:var(--topbar-h);
+  padding-top:env(safe-area-inset-top);
+  background:var(--paper); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:12px; padding-left:16px; padding-right:16px;
+}
+#topbar .brand{font-family:var(--serif);font-weight:700;letter-spacing:.22em;text-transform:uppercase;font-size:16px}
+#topbar .tb-title{font-family:var(--serif);letter-spacing:.14em;text-transform:uppercase;font-size:13px;color:var(--ink2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#topbar .tb-mode{font-size:10px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);padding:3px 7px;color:var(--ink2)}
+#topbar .tb-mode.live{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.wrap{display:flex;min-height:calc(100dvh - var(--topbar-h))}
+#sidenav{display:none}
+@media(min-width:860px){
+  #sidenav{
+    display:flex;flex-direction:column;width:210px;flex:0 0 210px;
+    border-right:1px solid var(--line);padding:14px 10px;gap:2px;
+    position:sticky;top:var(--topbar-h);height:calc(100dvh - var(--topbar-h));
+  }
+  #sidenav a{
+    display:flex;align-items:center;gap:10px;padding:11px 12px;text-decoration:none;
+    font-size:13px;letter-spacing:.04em;color:var(--ink2);border:1px solid transparent;
+  }
+  #sidenav a .ico{width:18px;text-align:center}
+  #sidenav a.active{background:var(--surface);color:var(--ink);border-color:var(--line);font-weight:700}
+  #sidenav a .n-badge{margin-left:auto;background:var(--ink);color:var(--paper);font-size:10px;padding:1px 6px;min-width:18px;text-align:center}
+  #bottomnav{display:none !important}
+}
+#app{flex:1;min-width:0;padding:18px 16px calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);max-width:1200px;margin:0 auto;width:100%}
+@media(min-width:860px){#app{padding-bottom:40px}}
+
+#bottomnav{
+  position:fixed;bottom:0;left:0;right:0;z-index:40;height:calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  background:var(--paper);border-top:1px solid var(--line);
+  display:flex;justify-content:space-around;align-items:stretch;
+}
+#bottomnav a{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  text-decoration:none;color:var(--ink2);font-size:9px;letter-spacing:.04em;text-transform:uppercase;position:relative;
+}
+#bottomnav a .ico{font-size:19px;line-height:1}
+#bottomnav a.active{color:var(--ink)}
+#bottomnav a.active .ico{transform:translateY(-1px)}
+#bottomnav a .n-dot{position:absolute;top:8px;right:calc(50% - 18px);background:var(--danger);color:#fff;font-size:9px;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+
+/* ---------- Components ---------- */
+.page-head{margin-bottom:16px}
+.page-head h1{font-size:22px;margin-bottom:4px}
+.page-head p{color:var(--ink2);font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.spacer{flex:1}
+.card{background:var(--surface);border:1px solid var(--line);padding:16px}
+.card + .card{margin-top:12px}
+.muted{color:var(--ink2)}
+.small{font-size:12px}
+.tiny{font-size:11px;letter-spacing:.04em}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border:1px solid var(--ink);background:var(--surface);color:var(--ink);
+  padding:10px 15px;cursor:pointer;font-size:13px;letter-spacing:.04em;
+  min-height:42px;text-decoration:none;transition:background .12s,color .12s;
+}
+.btn:hover{background:var(--surface2)}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-primary:hover{background:#000}
+.btn-ghost{border-color:var(--line2);color:var(--ink2)}
+.btn-ghost:hover{background:var(--surface2);color:var(--ink)}
+.btn-danger{border-color:var(--danger);color:var(--danger)}
+.btn-danger:hover{background:var(--danger);color:#fff}
+.btn-sm{min-height:34px;padding:6px 11px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-block{width:100%}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;letter-spacing:.03em;padding:2px 8px;border:1px solid var(--line2);background:var(--muted-bg);color:var(--muted);white-space:nowrap}
+.badge.warn{background:var(--warn-bg);color:var(--warn);border-color:#e2cf9a}
+.badge.danger{background:var(--danger-bg);color:var(--danger);border-color:#e0b6b6}
+.badge.ok{background:var(--ok-bg);color:var(--ok);border-color:#b3d3bd}
+.badge.info{background:var(--info-bg);color:var(--info);border-color:#b8cad9}
+.badge.ink{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+label.field{display:block;margin-bottom:12px}
+label.field > span{display:block;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);margin-bottom:5px}
+input[type=text],input[type=password],input[type=number],input[type=date],select,textarea{
+  width:100%;background:var(--surface);border:1px solid var(--line2);padding:11px 12px;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--ink)}
+textarea{resize:vertical;min-height:90px;line-height:1.5}
+
+/* KPI grid */
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:560px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--line);padding:14px}
+.kpi .k-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+.kpi .k-val{font-family:var(--serif);font-size:26px;font-weight:600;margin-top:6px;letter-spacing:.02em}
+.kpi .k-sub{font-size:11px;color:var(--ink2);margin-top:2px}
+
+/* Category chips row */
+.catgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(min-width:640px){.catgrid{grid-template-columns:repeat(4,1fr)}}
+.catchip{border:1px solid var(--line);background:var(--surface);padding:11px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:3px}
+.catchip:hover{background:var(--surface2)}
+.catchip .cc-n{font-family:var(--serif);font-size:24px;font-weight:600}
+.catchip .cc-l{font-size:11px;color:var(--ink2);letter-spacing:.02em;line-height:1.25}
+.catchip.hot .cc-n{color:var(--danger)}
+
+/* Kanban board */
+.board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.col{flex:0 0 270px;scroll-snap-align:start;background:var(--surface2);border:1px solid var(--line);display:flex;flex-direction:column;max-height:calc(100dvh - 220px)}
+.col-h{padding:10px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface2);display:flex;align-items:center;gap:8px}
+.col-h .c-t{font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+.col-h .c-c{margin-left:auto;font-size:11px;background:var(--ink);color:var(--paper);padding:1px 7px}
+.col-body{padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.ocard{background:var(--surface);border:1px solid var(--line);padding:10px;cursor:pointer}
+.ocard:hover{border-color:var(--ink)}
+.ocard .o-top{display:flex;align-items:baseline;gap:8px}
+.ocard .o-name{font-family:var(--serif);font-weight:700;letter-spacing:.04em}
+.ocard .o-total{margin-left:auto;font-weight:700}
+.ocard .o-cust{font-size:12px;color:var(--ink2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ocard .o-meta{font-size:11px;color:var(--ink2);margin-top:4px}
+.ocard .o-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
+
+/* list view */
+.list-item{background:var(--surface);border:1px solid var(--line);padding:12px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+.list-item:hover{border-color:var(--ink)}
+.list-item + .list-item{margin-top:8px}
+
+/* toggles */
+.toggle-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-row .t-l{flex:1;font-size:13px}
+.switch{position:relative;width:44px;height:26px;flex:0 0 44px}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch .sl{position:absolute;inset:0;background:var(--line2);cursor:pointer;transition:.15s}
+.switch .sl:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;transition:.15s}
+.switch input:checked + .sl{background:var(--ink)}
+.switch input:checked + .sl:before{transform:translateX(18px)}
+
+/* segmented */
+.seg{display:inline-flex;border:1px solid var(--line2)}
+.seg button{background:var(--surface);border:none;border-right:1px solid var(--line2);padding:8px 13px;cursor:pointer;font-size:12px;letter-spacing:.03em}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--ink);color:var(--paper)}
+
+.empty{text-align:center;padding:48px 20px;color:var(--ink2)}
+.empty .e-ico{font-size:38px;margin-bottom:12px}
+.empty p{margin-bottom:16px;max-width:420px;margin-left:auto;margin-right:auto}
+
+.divider{height:1px;background:var(--line);margin:16px 0}
+.kv{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv .k{width:130px;flex:0 0 130px;color:var(--ink2);font-size:12px;letter-spacing:.03em}
+.kv .v{flex:1;word-break:break-word}
+.thumb{width:64px;height:64px;object-fit:cover;border:1px solid var(--line2);background:var(--surface2)}
+.imgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dow{text-align:center;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:4px 0}
+.cal .cell{aspect-ratio:1;border:1px solid var(--line);background:var(--surface);padding:5px;cursor:pointer;display:flex;flex-direction:column;font-size:12px;position:relative}
+.cal .cell:hover{border-color:var(--ink)}
+.cal .cell.other{opacity:.4}
+.cal .cell.today{border-color:var(--ink);border-width:2px}
+.cal .cell .cnum{font-weight:700}
+.cal .cell .cdot{position:absolute;bottom:4px;left:5px;right:5px;height:4px}
+.cal .cell .cdot span{display:inline-block;width:5px;height:5px;background:var(--ink);margin-right:2px}
+.cal .cell .cdot .open{background:var(--warn)}
+
+/* modal + toast */
+#modal-root{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(20,20,20,.45)}
+#modal-root.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--ink);max-width:560px;width:100%;max-height:88dvh;overflow-y:auto;padding:22px}
+.modal h2{font-size:18px;margin-bottom:12px}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+#toast-root{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 14px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding:0 16px}
+@media(min-width:860px){#toast-root{bottom:20px}}
+.toast{background:var(--ink);color:var(--paper);padding:11px 16px;font-size:13px;max-width:460px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+
+.notice{border:1px solid var(--line2);background:var(--surface);padding:12px 14px;font-size:13px;color:var(--ink2);display:flex;gap:10px}
+.notice .ni{font-size:16px}
+.notice.warn{background:var(--warn-bg);border-color:#e2cf9a;color:#7a5b0a}
+
+.codebox{background:var(--ink);color:#e8e8e8;padding:14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.55;overflow-x:auto;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--paper);border-top-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <span class="brand">M.IRIS</span>
+  <span class="tb-title" id="tb-title">Cockpit</span>
+  <span class="tb-mode" id="tb-mode">Import</span>
+</div>
+<div class="wrap">
+  <nav id="sidenav"></nav>
+  <main id="app"></main>
+</div>
+<nav id="bottomnav"></nav>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+"use strict";
+/* ======================================================================
+   M.IRIS Operations-Cockpit — Phase 1 (statische PWA, localStorage)
+   ====================================================================== */
+
+/* ---------- Store: einziger localStorage-Pfad, mit In-Memory-Fallback ---------- */
+const Store = (() => {
+  const mem = {}; let available = false;
+  try { localStorage.setItem("miris.__test","1"); localStorage.removeItem("miris.__test"); available = true; }
+  catch(e){ available = false; }
+  return {
+    available,
+    get(key, fb){ try{ const raw = available ? localStorage.getItem(key) : mem[key]; return (raw==null)?fb:JSON.parse(raw); }catch(e){ return fb; } },
+    set(key, val){ let raw; try{ raw = JSON.stringify(val); }catch(e){ return false; }
+      try{ if(available) localStorage.setItem(key,raw); else mem[key]=raw; return true; }
+      catch(e){ toast("Speichern fehlgeschlagen – Speicher voll? Bitte Backup exportieren."); return false; } },
+    remove(key){ try{ if(available) localStorage.removeItem(key); else delete mem[key]; }catch(e){} }
+  };
+})();
+
+/* ---------- Konstanten & Schema ---------- */
+const SCHEMA_VERSION = 1;
+const K = {
+  meta:"miris.meta", settings:"miris.settings", orders:"miris.orders",
+  anliegen:"miris.anliegen", gaps:"miris.gaps", images:"miris.images",
+  days:"miris.days", importlog:"miris.importlog"
+};
+const DEFAULT_SETTINGS = {
+  apiKey:"", model:"claude-opus-4-8", backendUrl:"", adminToken:"",
+  mahnungDays:7, kanbanMode:true
+};
+const AI_MODELS = [
+  { id:"claude-opus-4-8", label:"Claude Opus 4.8 (beste Qualität)" },
+  { id:"claude-haiku-4-5", label:"Claude Haiku 4.5 (schnell & günstig)" }
+];
+// Kategorien in Lebenszyklus-Reihenfolge
+const CATS = [
+  "Zahlung offen","Mahnung fällig","Reparatur","Farbvorschau offen",
+  "Vorschau gesendet – wartet auf Freigabe","Freigegeben – muss versendet werden",
+  "Versendet","Erledigt"
+];
+const CAT_META = {
+  "Zahlung offen":{k:"warn",ico:"⏳"},
+  "Mahnung fällig":{k:"danger",ico:"⚠️"},
+  "Reparatur":{k:"info",ico:"🔧"},
+  "Farbvorschau offen":{k:"warn",ico:"🎨"},
+  "Vorschau gesendet – wartet auf Freigabe":{k:"info",ico:"📤"},
+  "Freigegeben – muss versendet werden":{k:"ok",ico:"📦"},
+  "Versendet":{k:"muted",ico:"✅"},
+  "Erledigt":{k:"muted",ico:"🗄️"}
+};
+const ANLIEGEN_KINDS = ["Chat-Nachricht","Feedback","Adressänderung","Widerruf","Sonstiges"];
+
+/* ---------- Sanitizer ---------- */
+function num(v,d){ const n=Number(v); return isFinite(n)?n:(d||0); }
+function str(v,max){ return String(v==null?"":v).slice(0,max||2000); }
+function tsMs(v){ if(v==null||v==="") return null; if(typeof v==="number") return v; const t=Date.parse(v); return isNaN(t)?null:t; }
+
+function DEFAULT_LOCAL(){ return { previewSentAt:null, mahnungSentAt:null, shippedMarkedAt:null, manualCategory:null, notes:"", done:false }; }
+
+function sanitizeOrder(o){
+  if(!o || typeof o!=="object" || !o.name) return null;
+  const local = Object.assign(DEFAULT_LOCAL(), (o.local&&typeof o.local==="object")?o.local:{});
+  local.notes = str(local.notes,2000); local.done = !!local.done;
+  local.manualCategory = (CATS.includes(local.manualCategory))?local.manualCategory:null;
+  const lineItems = (Array.isArray(o.lineItems)?o.lineItems:[]).map(li=>({
+    title: str(li&&li.title,200),
+    quantity: num(li&&li.quantity,1),
+    properties: (li&&li.properties&&typeof li.properties==="object")?li.properties:{}
+  }));
+  const miris = (o.miris&&typeof o.miris==="object")?o.miris:{};
+  return {
+    name: str(o.name,40),
+    customerName: str(o.customerName,120),
+    customerEmail: str(o.customerEmail,160),
+    createdAt: tsMs(o.createdAt) || Date.now(),
+    totalPrice: num(o.totalPrice,0),
+    currency: str(o.currency||"EUR",8),
+    financialStatus: str(o.financialStatus||"",40),
+    fulfillmentStatus: str(o.fulfillmentStatus||"",40),
+    lineItems, miris,
+    adminUrl: str(o.adminUrl,400),
+    isWiderruf: !!o.isWiderruf,
+    local, _sourceHash: str(o._sourceHash,64), updatedAt: tsMs(o.updatedAt)||Date.now()
+  };
+}
+function sanitizeAnliegen(a){
+  if(!a || typeof a!=="object") return null;
+  const id = a.id || hashId([a.date,a.subject||a.thema,a.customerEmail,a.nachricht].join("|"));
+  const kind = ANLIEGEN_KINDS.includes(a.kind)?a.kind:"Sonstiges";
+  const status = ["offen","in Arbeit","erledigt"].includes(a.status)?a.status:"offen";
+  return {
+    id:String(id), date: tsMs(a.date)||Date.now(), kind,
+    customerName: str(a.customerName,120), customerEmail: str(a.customerEmail,160),
+    thema: str(a.thema,300), nachricht: str(a.nachricht,4000),
+    relatedOrder: a.relatedOrder?str(a.relatedOrder,40):null,
+    widerrufAdminUrl: a.widerrufAdminUrl?str(a.widerrufAdminUrl,400):null,
+    status, localNotes: str(a.localNotes,2000), updatedAt: tsMs(a.updatedAt)||Date.now()
+  };
+}
+function sanitizeGap(g){
+  if(!g || typeof g!=="object") return null;
+  const frage = str(g.frage,600).trim(); if(!frage) return null;
+  const status = ["neu","geplant","eingebaut"].includes(g.status)?g.status:"neu";
+  return {
+    id: String(g.id||hashId("gap|"+frage)), frage, kontext: str(g.kontext,1000),
+    haeufigkeit: Math.max(1,num(g.haeufigkeit,1)), vorgeschlagene_antwort: str(g.vorgeschlagene_antwort,2000),
+    status, sourceAnliegenIds: Array.isArray(g.sourceAnliegenIds)?g.sourceAnliegenIds.map(String).slice(0,50):[],
+    createdAt: tsMs(g.createdAt)||Date.now()
+  };
+}
+function sanitizeImage(im){
+  if(!im || typeof im!=="object" || !im.imageUrl) return null;
+  const id = im.id || hashId((im.orderName||"")+"|"+im.imageUrl);
+  return {
+    id:String(id), orderName: str(im.orderName,40), imageUrl: str(im.imageUrl,600),
+    cloudinaryPublicId: str(im.cloudinaryPublicId || cloudinaryPublicId(im.imageUrl),300),
+    label: str(im.label,120),
+    ageDays: num(im.ageDays,0),
+    flaggedForDeletion: !!im.flaggedForDeletion, deletedAt: tsMs(im.deletedAt),
+    notes: str(im.notes,600)
+  };
+}
+function sanitizeDays(obj){
+  const out={}; if(!obj||typeof obj!=="object"||Array.isArray(obj)) return out;
+  Object.keys(obj).forEach(k=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||!Array.isArray(obj[k])) return;
+    const list = obj[k].map(t=>{
+      if(!t||typeof t!=="object"||!t.id) return null;
+      const text = str(t.text,300).trim(); if(!text) return null;
+      return { id:String(t.id), text, done:!!t.done, priority:Math.min(2,Math.max(0,num(t.priority,0))),
+        linkedOrder:t.linkedOrder?str(t.linkedOrder,40):null, linkedAnliegen:t.linkedAnliegen?str(t.linkedAnliegen,64):null,
+        createdAt:tsMs(t.createdAt)||Date.now() };
+    }).filter(Boolean);
+    if(list.length) out[k]=list;
+  });
+  return out;
+}
+
+/* ---------- State ---------- */
+const state = {
+  settings:Object.assign({},DEFAULT_SETTINGS),
+  orders:{}, anliegen:{}, gaps:{}, images:{}, days:{}, importlog:{},
+  ui:{ ordersView:"kanban", ordersFilter:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null }
+};
+
+function loadState(){
+  const meta = Store.get(K.meta,{schemaVersion:SCHEMA_VERSION});
+  if(meta.schemaVersion < SCHEMA_VERSION){ /* Migrations-Gerüst */ }
+  Store.set(K.meta,{schemaVersion:SCHEMA_VERSION});
+  state.settings = Object.assign({},DEFAULT_SETTINGS,Store.get(K.settings,{}));
+  state.settings.mahnungDays = Math.max(1,num(state.settings.mahnungDays,7));
+  state.orders = mapSanitize(Store.get(K.orders,{}), sanitizeOrder, "name");
+  state.anliegen = mapSanitize(Store.get(K.anliegen,{}), sanitizeAnliegen, "id");
+  state.gaps = mapSanitize(Store.get(K.gaps,{}), sanitizeGap, "id");
+  state.images = mapSanitize(Store.get(K.images,{}), sanitizeImage, "id");
+  state.days = sanitizeDays(Store.get(K.days,{}));
+  state.importlog = Store.get(K.importlog,{}) || {};
+  state.ui.ordersView = state.settings.kanbanMode ? "kanban" : "liste";
+}
+function mapSanitize(raw, fn, keyField){
+  const out={}; if(!raw||typeof raw!=="object") return out;
+  const vals = Array.isArray(raw)?raw:Object.values(raw);
+  vals.forEach(v=>{ const s=fn(v); if(s) out[s[keyField]]=s; });
+  return out;
+}
+let saveTimer=null; const pending=new Set();
+function persist(keys){ keys.forEach(k=>pending.add(k)); clearTimeout(saveTimer); saveTimer=setTimeout(flushSaves,150); }
+function flushSaves(){ clearTimeout(saveTimer); pending.forEach(k=>Store.set(K[k],state[k])); pending.clear(); }
+try{ window.addEventListener("pagehide",flushSaves); document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushSaves(); }); }catch(e){}
+function saveOrders(){ persist(["orders"]); } function saveAnliegen(){ persist(["anliegen"]); }
+function saveGaps(){ persist(["gaps"]); } function saveImages(){ persist(["images"]); }
+function saveDays(){ persist(["days"]); } function saveSettings(){ persist(["settings"]); }
+function saveImportlog(){ persist(["importlog"]); }
+
+/* ---------- Helfer ---------- */
+function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
+function hashId(s){ let h=5381; s=String(s); for(let i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))>>>0; } return h.toString(36); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function el(html){ const t=document.createElement("template"); t.innerHTML=String(html).trim(); return t.content.firstElementChild; }
+function todayStr(d){ try{ return (d||new Date()).toLocaleDateString("sv"); }catch(e){ const x=d||new Date(); return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); } }
+function fmtDate(ts){ if(!ts) return "—"; try{ return new Date(ts).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}); }catch(e){ return ""; } }
+function fmtDateTime(ts){ if(!ts) return "—"; try{ return new Date(ts).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } }
+function fmtMoney(n,cur){ try{ return new Intl.NumberFormat("de-DE",{style:"currency",currency:cur||"EUR"}).format(num(n,0)); }catch(e){ return num(n,0).toFixed(2)+" €"; } }
+function ageDays(ts,now){ return ((now||Date.now())-ts)/86400000; }
+function normStr(s){ return String(s==null?"":s).toLowerCase().trim(); }
+function cloudinaryPublicId(url){
+  const m = String(url||"").match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-z0-9]+)?(?:\?.*)?$/i);
+  return m ? m[1] : "";
+}
+function isCloudinary(url){ return /res\.cloudinary\.com/.test(String(url||"")); }
+function prettyToken(s){ return String(s||"").replace(/_/g," "); }
+
+/* ---------- Toast / Modal ---------- */
+function toast(msg,ms){ const root=document.getElementById("toast-root"); if(!root) return; const t=el('<div class="toast"></div>'); t.textContent=msg; root.appendChild(t); setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .3s"; },(ms||2600)-300); setTimeout(()=>t.remove(),ms||2600); }
+function showModal(inner,opts){ const root=document.getElementById("modal-root"); root.innerHTML='<div class="modal" role="dialog"></div>'; root.firstElementChild.innerHTML=inner; root.classList.add("open"); root.onclick=(e)=>{ if(e.target===root && !(opts&&opts.sticky)) closeModal(); }; document.body.classList.add("no-scroll"); return root.firstElementChild; }
+function closeModal(){ const root=document.getElementById("modal-root"); root.classList.remove("open"); root.innerHTML=""; root.onclick=null; document.body.classList.remove("no-scroll"); }
+function confirmDialog(title,text,okLabel,danger){ return new Promise(res=>{ const m=showModal('<h2>'+esc(title)+'</h2><p class="muted" style="line-height:1.6">'+esc(text)+'</p><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn '+(danger?"btn-danger":"btn-primary")+'" data-x="yes">'+esc(okLabel||"OK")+'</button></div>'); m.querySelector('[data-x=no]').onclick=()=>{closeModal();res(false);}; m.querySelector('[data-x=yes]').onclick=()=>{closeModal();res(true);}; }); }
+function promptModal(title,label,val,multiline){ return new Promise(res=>{ const inp = multiline?'<textarea id="pm-in">'+esc(val||"")+'</textarea>':'<input type="text" id="pm-in" value="'+esc(val||"")+'">'; const m=showModal('<h2>'+esc(title)+'</h2><label class="field"><span>'+esc(label||"")+'</span>'+inp+'</label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Speichern</button></div>'); const input=m.querySelector("#pm-in"); input.focus(); m.querySelector('[data-x=no]').onclick=()=>{closeModal();res(null);}; m.querySelector('[data-x=yes]').onclick=()=>{const v=input.value;closeModal();res(v);}; }); }
+
+/* ======================================================================
+   Kategorisierungs-Engine (reine Funktion) — verifiziert an Live-Orders
+   ====================================================================== */
+function categorize(o, settings, now){
+  now = now||Date.now();
+  const L=o.local||{}, m=o.miris||{};
+  const fin=normStr(o.financialStatus), ful=normStr(o.fulfillmentStatus);
+  const appr=normStr(m.approval_status), dec=normStr(m.customer_decision);
+  const titles=(o.lineItems||[]).map(li=>li.title).join(" ");
+  const isRepair = !!m.repair_status || /reparatur/i.test(titles);
+  const badges=[];
+  if(o.isWiderruf) badges.push({t:"Widerruf",k:"warn"});
+  if(fin==="voided") badges.push({t:"Storniert",k:"muted"});
+  if(fin==="refunded"||fin==="partially_refunded") badges.push({t:"Erstattet",k:"muted"});
+  if(fin==="partially_paid") badges.push({t:"Teilzahlung",k:"warn"});
+  if(m.repair_status) badges.push({t:"Reparatur: "+prettyToken(m.repair_status),k:"info"});
+  if(num(m.revision_count,0)>0) badges.push({t:"Revision ×"+num(m.revision_count,0),k:"info"});
+  if(L.mahnungSentAt) badges.push({t:"Mahnung "+fmtDate(L.mahnungSentAt),k:"muted"});
+
+  if(L.done) return {primary:"Erledigt",badges};
+  if(L.manualCategory) return {primary:L.manualCategory,badges};
+
+  const unpaid = ["pending","authorized","partially_paid"].includes(fin);
+  if(unpaid){
+    const overdue = ageDays(o.createdAt,now) >= (settings.mahnungDays||7) && !L.mahnungSentAt;
+    return {primary: overdue?"Mahnung fällig":"Zahlung offen", badges};
+  }
+  if(fin==="voided"||fin==="refunded"){
+    return {primary: ful==="fulfilled"?"Versendet":"Erledigt", badges};
+  }
+  // ab hier: bezahlt (inkl. 0 €)
+  if(ful==="fulfilled") return {primary:"Versendet",badges};
+  if(isRepair) return {primary:"Reparatur",badges};
+  // Set-Bestellung, bezahlt, unfulfilled → Farbvorschau-Lebenszyklus
+  const approved = dec.indexOf("freigegeben")>=0 || appr==="versandbereit" || appr==="freigegeben";
+  if(approved) return {primary:"Freigegeben – muss versendet werden",badges};
+  const revision = appr.indexOf("revision")>=0 || appr.indexOf("überarbeit")>=0 || dec.indexOf("revision")>=0 || dec.indexOf("änderung")>=0;
+  if(revision){ badges.push({t:"Überarbeitung",k:"warn"}); return {primary:"Farbvorschau offen",badges}; }
+  const sent = !!(m.preview_url||m.approval_url||m.preview_sent_at||L.previewSentAt) && appr!=="offen";
+  if(sent) return {primary:"Vorschau gesendet – wartet auf Freigabe",badges};
+  return {primary:"Farbvorschau offen",badges};
+}
+function ordersByCategory(now){
+  const buckets={}; CATS.forEach(c=>buckets[c]=[]);
+  Object.values(state.orders).forEach(o=>{ const {primary}=categorize(o,state.settings,now); (buckets[primary]||(buckets[primary]=[])).push(o); });
+  return buckets;
+}
+
+/* ---------- Umsatz / KPIs ---------- */
+function revenue(now){
+  now=now||Date.now();
+  const startOfDay=new Date(now); startOfDay.setHours(0,0,0,0);
+  const weekAgo=now-7*86400000, monthStart=new Date(now); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  let heute=0,woche=0,monat=0,gesamt=0,paidCount=0;
+  Object.values(state.orders).forEach(o=>{
+    if(normStr(o.financialStatus)!=="paid") return;
+    const amt=num(o.totalPrice,0); gesamt+=amt; paidCount++;
+    if(o.createdAt>=startOfDay.getTime()) heute+=amt;
+    if(o.createdAt>=weekAgo) woche+=amt;
+    if(o.createdAt>=monthStart.getTime()) monat+=amt;
+  });
+  return {heute,woche,monat,gesamt,paidCount};
+}
+function openAnliegenCount(){ return Object.values(state.anliegen).filter(a=>a.status!=="erledigt").length; }
+function openImagesCount(){ return Object.values(state.images).filter(im=>im.flaggedForDeletion && !im.deletedAt).length; }
+function openGapsCount(){ return Object.values(state.gaps).filter(g=>g.status!=="eingebaut").length; }
+function todaysTasks(){ return (state.days[todayStr()]||[]); }
+
+/* ======================================================================
+   Daten-Provider: Import (JSON/CSV/E-Mail) + Live (Admin-Dienst)
+   ====================================================================== */
+function orderSourceHash(o){ // hash über Remote-Felder (ohne local{})
+  return hashId(JSON.stringify({n:o.name,c:o.createdAt,t:o.totalPrice,f:o.financialStatus,fu:o.fulfillmentStatus,m:o.miris,li:o.lineItems,w:o.isWiderruf}));
+}
+function mergeOrders(incoming){
+  let added=0,updated=0;
+  incoming.forEach(raw=>{
+    const inc=sanitizeOrder(raw); if(!inc) return;
+    const hash=orderSourceHash(inc); inc._sourceHash=hash;
+    const ex=state.orders[inc.name];
+    if(!ex){ inc.local=DEFAULT_LOCAL();
+      // internal_note → local.notes (nur wenn leer)
+      if(inc.miris && inc.miris.internal_note) inc.local.notes=str(inc.miris.internal_note,2000);
+      state.orders[inc.name]=inc; added++;
+    } else if(ex._sourceHash!==hash){
+      const keepLocal=ex.local;
+      inc.local=keepLocal; inc.updatedAt=Date.now();
+      if((!keepLocal.notes||!keepLocal.notes.trim()) && inc.miris && inc.miris.internal_note) inc.local.notes=str(inc.miris.internal_note,2000);
+      state.orders[inc.name]=inc; updated++;
+    }
+  });
+  if(added||updated) saveOrders();
+  return {added,updated};
+}
+function mergeAnliegen(incoming){
+  let added=0,updated=0;
+  incoming.forEach(raw=>{
+    const inc=sanitizeAnliegen(raw); if(!inc) return;
+    const ex=state.anliegen[inc.id];
+    if(!ex){ state.anliegen[inc.id]=inc; added++; }
+    else { // Remote-Felder auffrischen, Status/Notizen behalten
+      inc.status=ex.status; inc.localNotes=ex.localNotes; state.anliegen[inc.id]=inc; updated++;
+    }
+    if(inc.kind==="Widerruf" && inc.relatedOrder && state.orders[inc.relatedOrder]){ state.orders[inc.relatedOrder].isWiderruf=true; saveOrders(); }
+  });
+  if(added||updated) saveAnliegen();
+  return {added,updated};
+}
+function mergeImages(incoming){
+  let added=0,updated=0;
+  incoming.forEach(raw=>{
+    const inc=sanitizeImage(raw); if(!inc) return;
+    const ex=state.images[inc.id];
+    if(!ex){ state.images[inc.id]=inc; added++; }
+    else { inc.flaggedForDeletion=ex.flaggedForDeletion; inc.deletedAt=ex.deletedAt; inc.notes=ex.notes; state.images[inc.id]=inc; updated++; }
+  });
+  if(added||updated) saveImages();
+  return {added,updated};
+}
+function mergeGaps(incoming){
+  let added=0;
+  const norm=(s)=>normStr(s).replace(/\s+/g," ").replace(/[?.!,]+$/,"");
+  const existing=Object.values(state.gaps);
+  incoming.forEach(raw=>{
+    const inc=sanitizeGap(raw); if(!inc) return;
+    const dup=existing.find(g=>norm(g.frage)===norm(inc.frage));
+    if(dup){ dup.haeufigkeit=Math.max(dup.haeufigkeit,inc.haeufigkeit); if(!dup.vorgeschlagene_antwort && inc.vorgeschlagene_antwort) dup.vorgeschlagene_antwort=inc.vorgeschlagene_antwort; }
+    else { state.gaps[inc.id]=inc; existing.push(inc); added++; }
+  });
+  if(added) saveGaps();
+  return {added};
+}
+// Bilder aus Bestell-Line-Items ableiten (Auge N Bild)
+function deriveImagesFromOrders(){
+  const now=Date.now(); const out=[];
+  Object.values(state.orders).forEach(o=>{
+    (o.lineItems||[]).forEach(li=>{
+      Object.keys(li.properties||{}).forEach(key=>{
+        const val=li.properties[key];
+        if(/^Auge\s*\d+\s*Bild$/i.test(key) && val && isCloudinary(val)){
+          out.push({ orderName:o.name, imageUrl:val, label:key, ageDays:Math.round(ageDays(o.createdAt,now)) });
+        }
+      });
+    });
+  });
+  return out;
+}
+
+/* ---------- Snapshot / CSV / E-Mail Parser ---------- */
+function importSnapshot(json){
+  let data; try{ data=(typeof json==="string")?JSON.parse(json):json; }catch(e){ throw new Error("Ungültiges JSON."); }
+  if(!data || typeof data!=="object") throw new Error("Leeres Snapshot.");
+  if(data.snapshotVersion && num(data.snapshotVersion,1)!==1) throw new Error("Unbekannte Snapshot-Version.");
+  const ro = Array.isArray(data.orders)?mergeOrders(data.orders):{added:0,updated:0};
+  const ra = Array.isArray(data.anliegen)?mergeAnliegen(data.anliegen):{added:0,updated:0};
+  let ri={added:0,updated:0};
+  if(Array.isArray(data.images) && data.images.length) ri=mergeImages(data.images);
+  // zusätzlich Bilder aus Orders ableiten
+  const derived=deriveImagesFromOrders(); if(derived.length){ const r2=mergeImages(derived); ri.added+=r2.added; }
+  state.importlog.lastSnapshotAt=Date.now();
+  state.importlog.generatedAt=tsMs(data.generatedAt)||null;
+  saveImportlog();
+  return {orders:ro, anliegen:ra, images:ri};
+}
+function parseCSV(text){
+  // simpler robuster CSV-Reader (Anführungszeichen + Zeilenumbrüche)
+  const rows=[]; let row=[], field="", i=0, q=false;
+  while(i<text.length){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){ field+='"'; i++; } else q=false; } else field+=c; }
+    else { if(c==='"') q=true; else if(c===","){ row.push(field); field=""; } else if(c==="\n"){ row.push(field); rows.push(row); row=[]; field=""; } else if(c==="\r"){} else field+=c; }
+    i++;
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r=>r.length>1);
+}
+function importCSV(text){
+  const rows=parseCSV(text); if(rows.length<2) throw new Error("CSV enthält keine Datenzeilen.");
+  const head=rows[0].map(h=>h.trim().toLowerCase());
+  const idx=(names)=>{ for(const n of names){ const p=head.indexOf(n); if(p>=0) return p; } return -1; };
+  const iName=idx(["name"]), iFin=idx(["financial status","zahlungsstatus"]), iFul=idx(["fulfillment status","fulfillment-status"]),
+    iTot=idx(["total","gesamt"]), iCreated=idx(["created at","erstellt am"]), iEmail=idx(["email","e-mail"]), iCust=idx(["billing name","customer name","name (billing)"]);
+  if(iName<0) throw new Error("Spalte 'Name' nicht gefunden.");
+  const byName={};
+  for(let r=1;r<rows.length;r++){ const row=rows[r]; const name=(row[iName]||"").trim(); if(!name) continue;
+    if(!byName[name]){ byName[name]={ name, customerName:iCust>=0?row[iCust]:"", customerEmail:iEmail>=0?row[iEmail]:"",
+      createdAt:iCreated>=0?row[iCreated]:null, totalPrice:iTot>=0?parseFloat(String(row[iTot]).replace(",","."))||0:0,
+      currency:"EUR", financialStatus:iFin>=0?row[iFin]:"", fulfillmentStatus:iFul>=0?row[iFul]:"", lineItems:[], miris:{} }; }
+  }
+  return mergeOrders(Object.values(byName));
+}
+function parseEmail(raw){
+  const text=String(raw||""); const low=text.toLowerCase();
+  let kind="Sonstiges", customerName="", customerEmail="", thema="", nachricht="", relatedOrder=null, widerrufAdminUrl=null;
+  const orderMatch=text.match(/B\d{3,5}/); if(orderMatch) relatedOrder=orderMatch[0];
+  const emailMatch=text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(emailMatch) customerEmail=emailMatch[0];
+  const grab=(label)=>{ const re=new RegExp(label+"\\s*[:\\n]\\s*(.+)","i"); const m=text.match(re); return m?m[1].trim():""; };
+  if(/widerruf/i.test(low)){ kind="Widerruf"; customerName=grab("Name")||grab("nachname"); const w=text.match(/https?:\/\/\S*withdrawals?\/\S+/i); if(w) widerrufAdminUrl=w[0]; nachricht=grab("Weitere Informationen")||text.slice(0,500); thema="Widerruf "+(relatedOrder||""); }
+  else if(/adressänderung|adressaenderung/i.test(low)){ kind="Adressänderung"; }
+  else if(/feedback/i.test(low)){ kind="Feedback"; }
+  else if(/chat-nachricht|iris-chat|ki chat|chat/i.test(low)){ kind="Chat-Nachricht"; }
+  if(kind!=="Widerruf"){
+    customerName=customerName||grab("Name");
+    thema=grab("Thema")|| (kind==="Adressänderung"?("Adressänderung "+(relatedOrder||"")):"") ;
+    nachricht=grab("Nachricht")|| text.slice(0,800);
+  }
+  return { date:Date.now(), kind, customerName, customerEmail, thema:thema||kind, nachricht, relatedOrder, widerrufAdminUrl };
+}
+
+/* ---------- Live-Provider (Admin-Dienst, Phase 2/3) ---------- */
+function liveConfigured(){ return !!(state.settings.backendUrl && state.settings.adminToken); }
+async function liveFetch(path, opts){
+  const base=state.settings.backendUrl.replace(/\/$/,"");
+  const res=await fetch(base+path, Object.assign({ headers:{ "Authorization":"Bearer "+state.settings.adminToken, "content-type":"application/json" } }, opts||{}));
+  if(!res.ok){ let m=""; try{ const j=await res.json(); m=j.error||j.message||""; }catch(e){} throw new Error("Backend "+res.status+(m?": "+m:"")); }
+  return res.json();
+}
+async function liveSyncAll(){
+  if(!liveConfigured()) throw new Error("Kein Backend hinterlegt – bitte in den Einstellungen eintragen.");
+  const out={orders:{added:0,updated:0},anliegen:{added:0,updated:0},images:{added:0,updated:0}};
+  const od=await liveFetch("/admin/orders"); if(od&&Array.isArray(od.orders)) out.orders=mergeOrders(od.orders);
+  try{ const an=await liveFetch("/admin/anliegen"); if(an&&Array.isArray(an.anliegen)) out.anliegen=mergeAnliegen(an.anliegen); }catch(e){}
+  try{ const im=await liveFetch("/admin/images"); if(im&&Array.isArray(im.images)) out.images=mergeImages(im.images); }catch(e){}
+  const derived=deriveImagesFromOrders(); if(derived.length) mergeImages(derived);
+  state.importlog.lastLiveAt=Date.now(); saveImportlog();
+  return out;
+}
+
+/* ======================================================================
+   KI: Anthropic (browser-direct) — Wissenslücken-Extraktion
+   ====================================================================== */
+const API_URL="https://api.anthropic.com/v1/messages";
+function mapApiError(status,apiMsg){
+  const msgs={400:"Die KI hat die Anfrage abgelehnt.",401:"API-Schlüssel ungültig – bitte in den Einstellungen prüfen.",403:"Der API-Schlüssel hat keine Berechtigung.",404:"KI-Modell nicht gefunden – bitte Modell wechseln.",429:"Zu viele Anfragen – bitte kurz warten.",500:"KI-Dienst überlastet – bitte später erneut.",529:"KI-Dienst überlastet – bitte später erneut."};
+  return new Error((msgs[status]||("KI-Fehler ("+status+")."))+(apiMsg?" Details: "+apiMsg:""));
+}
+async function anthropicJSON(body,signal){
+  if(!state.settings.apiKey) throw new Error("Kein API-Schlüssel hinterlegt – bitte in den Einstellungen eintragen.");
+  let res; try{ res=await fetch(API_URL,{ method:"POST", headers:{ "content-type":"application/json","x-api-key":state.settings.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" }, body:JSON.stringify(body), signal }); }
+  catch(e){ if(e&&e.name==="AbortError") throw e; throw new Error("Keine Internetverbindung."); }
+  if(!res.ok){ let m=""; try{ const j=await res.json(); if(j&&j.error&&j.error.message) m=String(j.error.message).slice(0,200); }catch(e){} throw mapApiError(res.status,m); }
+  return res.json();
+}
+const GAP_TOOL={ name:"report_gaps", description:"Extrahiere aus Kundenanfragen die Fragen, bei denen die Mary-KI NICHT weiterhelfen konnte.", input_schema:{ type:"object", additionalProperties:false, required:["luecken"], properties:{ luecken:{ type:"array", items:{ type:"object", additionalProperties:false, required:["frage","kontext","haeufigkeit"], properties:{ frage:{type:"string",description:"Die Wissenslücke als klare Frage"}, kontext:{type:"string",description:"Worum ging es? Kurzkontext"}, haeufigkeit:{type:"integer",description:"Wie oft trat das Thema auf"}, vorgeschlagene_antwort:{type:"string",description:"Optionaler Antwortvorschlag für die KB"} } } } } } };
+async function runGapExtraction(inputText,signal){
+  const body={ model:state.settings.model||"claude-opus-4-8", max_tokens:8000, tools:[GAP_TOOL], tool_choice:{type:"tool",name:"report_gaps"},
+    messages:[{ role:"user", content:
+      "Du bist QA-Analyst für den M.IRIS-Kundenchat (KI-Assistentin \"Mary\"). Analysiere die folgenden Kundenanfragen bzw. Chat-Auszüge. "+
+      "Identifiziere AUSSCHLIESSLICH Fragen/Themen, bei denen Mary NICHT weiterhelfen konnte, ausgewichen ist oder an einen Menschen verwiesen hat. "+
+      "Fasse ähnliche Fälle zusammen und schätze die Häufigkeit. Antworte NUR über das Tool report_gaps.\n\n<anfragen>\n"+inputText+"\n</anfragen>" }] };
+  const data=await anthropicJSON(body,signal);
+  const block=(data.content||[]).find(c=>c.type==="tool_use");
+  if(!block||!block.input||!Array.isArray(block.input.luecken)) throw new Error("KI-Antwort ohne Ergebnis.");
+  return block.input.luecken;
+}
+
+/* ======================================================================
+   Router
+   ====================================================================== */
+const NAV_ITEMS=[
+  {name:"home",label:"Übersicht",ico:"◪",short:"Start"},
+  {name:"bestellungen",label:"Bestellungen",ico:"▦",short:"Orders"},
+  {name:"anliegen",label:"Anliegen",ico:"✉",short:"Anliegen"},
+  {name:"wissensluecken",label:"KI-Wissenslücken",ico:"◐",short:"KI-Lücken"},
+  {name:"dsgvo",label:"Augenbilder / DSGVO",ico:"◉",short:"DSGVO"},
+  {name:"kalender",label:"Kalender",ico:"▤",short:"Plan"},
+  {name:"import",label:"Import / Sync",ico:"⟳",short:"Sync"},
+  {name:"einstellungen",label:"Einstellungen",ico:"⚙",short:"Setup"}
+];
+function nav(hash){ location.hash=hash; }
+function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
+const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, anliegen:viewAnliegen, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, import:viewImport, einstellungen:viewSettings };
+function render(){
+  const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
+  const r=parseRoute(); const fn=views[r.name]||viewDashboard;
+  try{ fn(app,r.arg); }
+  catch(e){ app.innerHTML=""; app.appendChild(el('<div class="empty"><div class="e-ico">😵</div><p>Hier ist etwas schiefgelaufen: '+esc(e.message||String(e))+'</p><button class="btn btn-primary" onclick="location.hash=\'#/home\'">Zur Übersicht</button></div>')); }
+  renderChrome(r.name);
+}
+function renderChrome(activeName){
+  // topbar title + mode
+  const titleMap={ home:"Übersicht", bestellungen:"Bestellungen", bestellung:"Bestelldetail", anliegen:"Anliegen-Inbox", wissensluecken:"KI-Wissenslücken", dsgvo:"Augenbilder / DSGVO", kalender:"Kalender & Aufgaben", tag:"Tagesplan", import:"Import / Sync", einstellungen:"Einstellungen" };
+  document.getElementById("tb-title").textContent=titleMap[activeName]||"Cockpit";
+  const mode=document.getElementById("tb-mode"); const live=liveConfigured();
+  mode.textContent=live?"Live":"Import"; mode.classList.toggle("live",live);
+  // side + bottom nav
+  const side=document.getElementById("sidenav"); const bot=document.getElementById("bottomnav");
+  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount() };
+  side.innerHTML=NAV_ITEMS.map(it=>{
+    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="tag"&&it.name==="kalender");
+    const c=counts[it.name]; const badge=c?'<span class="n-badge">'+c+'</span>':"";
+    return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span><span>'+esc(it.label)+'</span>'+badge+'</a>';
+  }).join("");
+  const botItems=NAV_ITEMS.filter(it=>["home","bestellungen","anliegen","kalender","import"].includes(it.name));
+  bot.innerHTML=botItems.map(it=>{
+    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="tag"&&it.name==="kalender");
+    const c=counts[it.name]; const dot=c?'<span class="n-dot">'+c+'</span>':"";
+    return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span>'+dot+esc(it.short)+'</a>';
+  }).join("");
+}
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",anliegen:"✉",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",import:"⟳",einstellungen:"⚙"}; return m[name]||"•"; }
+
+/* ======================================================================
+   Views
+   ====================================================================== */
+function pageHead(title,sub){ return '<div class="page-head"><h1>'+esc(title)+'</h1>'+(sub?'<p>'+esc(sub)+'</p>':"")+'</div>'; }
+
+function viewDashboard(app){
+  const now=Date.now(); const rev=revenue(now); const buckets=ordersByCategory(now);
+  const totalOrders=Object.keys(state.orders).length;
+  const wrap=el('<div></div>');
+  wrap.innerHTML=pageHead("Übersicht","Dein Arbeitsstand auf einen Blick.");
+
+  // freshness
+  const fresh=state.importlog.lastLiveAt||state.importlog.lastSnapshotAt;
+  const freshTxt = fresh ? ("Datenstand: "+fmtDateTime(fresh)+(liveConfigured()?" · Live":" · Import")) : "Noch keine Daten importiert.";
+  wrap.appendChild(el('<div class="notice"><span class="ni">🕓</span><div>'+esc(freshTxt)+' <a href="#/import" style="text-decoration:underline">aktualisieren</a></div></div>'));
+
+  if(totalOrders===0){
+    wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Noch keine Bestellungen im Cockpit. Lade einen Daten-Snapshot, importiere eine CSV – oder starte mit Demo-Daten, um alles auszuprobieren.</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="#/import">Daten importieren</a><button class="btn btn-ghost" id="seed">Demo-Daten laden</button></div></div></div>'));
+    app.appendChild(wrap); wrap.querySelector("#seed").onclick=()=>{ seedDemo(); toast("Demo-Daten geladen"); render(); };
+    return;
+  }
+
+  // KPIs
+  const kp=el('<div class="kpis" style="margin-top:14px"></div>');
+  kp.innerHTML=
+    kpi("Umsatz heute",fmtMoney(rev.heute),rev.paidCount+" bezahlte Bestellungen")+
+    kpi("Umsatz Woche",fmtMoney(rev.woche),"letzte 7 Tage")+
+    kpi("Umsatz Monat",fmtMoney(rev.monat),"seit Monatsbeginn")+
+    kpi("Umsatz gesamt",fmtMoney(rev.gesamt),totalOrders+" Bestellungen gesamt");
+  wrap.appendChild(kp);
+
+  // Kategorien
+  wrap.appendChild(el('<h2 style="font-size:15px;margin:22px 0 10px">Bestellungen nach Status</h2>'));
+  const cg=el('<div class="catgrid"></div>');
+  cg.innerHTML=CATS.map(c=>{ const n=(buckets[c]||[]).length; const hot=(c==="Mahnung fällig"&&n>0); const meta=CAT_META[c]||{};
+    return '<button class="catchip'+(hot?" hot":"")+'" data-c="'+esc(c)+'"><span class="cc-n">'+n+'</span><span class="cc-l">'+esc(meta.ico?meta.ico+" ":"")+esc(c)+'</span></button>';
+  }).join("");
+  wrap.appendChild(cg);
+
+  // Aufgaben heute + offene Anliegen + DSGVO
+  const grid=el('<div style="display:grid;gap:12px;margin-top:22px;grid-template-columns:1fr"></div>');
+  // tasks
+  const tasks=todaysTasks();
+  const tcard=el('<div class="card"></div>');
+  tcard.innerHTML='<div class="row"><h2 style="font-size:15px">Heute zu tun</h2><span class="spacer"></span><a class="btn btn-sm btn-ghost" href="#/kalender">Kalender</a></div>';
+  if(tasks.length){ tasks.forEach(t=>{ const row=el('<div class="toggle-row"><span class="t-l">'+(t.done?'<s class="muted">':"")+esc(t.text)+(t.done?"</s>":"")+'</span></div>'); const sw=el('<label class="switch"><input type="checkbox" '+(t.done?"checked":"")+'><span class="sl"></span></label>'); sw.querySelector("input").onchange=(e)=>{ t.done=e.target.checked; saveDays(); render(); }; row.appendChild(sw); tcard.appendChild(row); }); }
+  else tcard.appendChild(el('<p class="muted small" style="margin-top:8px">Keine Aufgaben für heute. <a href="#/kalender" style="text-decoration:underline">Aufgabe planen</a></p>'));
+  grid.appendChild(tcard);
+  // anliegen + dsgvo summary
+  const sc=el('<div class="card"></div>');
+  sc.innerHTML='<div class="row" style="align-items:stretch;gap:12px">'+
+    '<a href="#/anliegen" style="flex:1;text-decoration:none"><div class="kpi" style="height:100%"><div class="k-label">Offene Anliegen</div><div class="k-val">'+openAnliegenCount()+'</div><div class="k-sub">Kundenanfragen abzuarbeiten</div></div></a>'+
+    '<a href="#/wissensluecken" style="flex:1;text-decoration:none"><div class="kpi" style="height:100%"><div class="k-label">KI-Wissenslücken</div><div class="k-val">'+openGapsCount()+'</div><div class="k-sub">für die KB offen</div></div></a>'+
+    '<a href="#/dsgvo" style="flex:1;text-decoration:none"><div class="kpi" style="height:100%"><div class="k-label">Bilder zu löschen</div><div class="k-val">'+openImagesCount()+'</div><div class="k-sub">DSGVO-Löschliste</div></div></a>'+
+    '</div>';
+  grid.appendChild(sc);
+  wrap.appendChild(grid);
+
+  app.appendChild(wrap);
+  cg.querySelectorAll(".catchip").forEach(b=>b.onclick=()=>{ state.ui.ordersFilter=b.getAttribute("data-c"); nav("#/bestellungen"); });
+}
+function kpi(label,val,sub){ return '<div class="kpi"><div class="k-label">'+esc(label)+'</div><div class="k-val">'+esc(val)+'</div><div class="k-sub">'+esc(sub||"")+'</div></div>'; }
+
+function viewOrders(app){
+  const now=Date.now(); const buckets=ordersByCategory(now);
+  const wrap=el('<div></div>');
+  wrap.innerHTML=pageHead("Bestellungen","Kategorisiert nach Arbeitsschritt. Tippe eine Karte für Details.");
+  // controls
+  const ctl=el('<div class="row" style="margin-bottom:14px"></div>');
+  const seg=el('<div class="seg"><button data-v="kanban" class="'+(state.ui.ordersView==="kanban"?"on":"")+'">Board</button><button data-v="liste" class="'+(state.ui.ordersView==="liste"?"on":"")+'">Liste</button></div>');
+  ctl.appendChild(seg);
+  const filterSel=el('<select style="max-width:260px"><option value="">Alle Kategorien</option>'+CATS.map(c=>'<option value="'+esc(c)+'"'+(state.ui.ordersFilter===c?" selected":"")+'>'+esc(c)+' ('+(buckets[c]||[]).length+')</option>').join("")+'</select>');
+  ctl.appendChild(filterSel);
+  ctl.appendChild(el('<span class="spacer"></span>'));
+  const syncBtn=el('<button class="btn btn-sm '+(liveConfigured()?"btn-primary":"btn-ghost")+'">⟳ '+(liveConfigured()?"Live aktualisieren":"Import")+'</button>');
+  syncBtn.onclick=()=>{ if(liveConfigured()) doLiveSync(); else nav("#/import"); };
+  ctl.appendChild(syncBtn);
+  wrap.appendChild(ctl);
+
+  seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{ state.ui.ordersView=b.getAttribute("data-v"); state.settings.kanbanMode=(state.ui.ordersView==="kanban"); saveSettings(); render(); });
+  filterSel.onchange=()=>{ state.ui.ordersFilter=filterSel.value; render(); };
+
+  if(Object.keys(state.orders).length===0){ wrap.appendChild(emptyBlock("Keine Bestellungen","Importiere einen Snapshot oder eine CSV.","#/import","Zum Import")); app.appendChild(wrap); return; }
+
+  if(state.ui.ordersView==="kanban" && !state.ui.ordersFilter){
+    const board=el('<div class="board"></div>');
+    CATS.forEach(cat=>{ const list=buckets[cat]||[]; const meta=CAT_META[cat]||{};
+      const col=el('<div class="col"><div class="col-h"><span>'+esc(meta.ico||"")+'</span><span class="c-t">'+esc(cat)+'</span><span class="c-c">'+list.length+'</span></div><div class="col-body"></div></div>');
+      const body=col.querySelector(".col-body");
+      if(!list.length) body.appendChild(el('<p class="muted tiny" style="padding:6px">—</p>'));
+      list.sort((a,b)=>a.createdAt-b.createdAt).forEach(o=>body.appendChild(orderCard(o,now)));
+      board.appendChild(col);
+    });
+    wrap.appendChild(board);
+  } else {
+    let list=Object.values(state.orders);
+    if(state.ui.ordersFilter) list=list.filter(o=>categorize(o,state.settings,now).primary===state.ui.ordersFilter);
+    list.sort((a,b)=>b.createdAt-a.createdAt);
+    const box=el('<div></div>');
+    if(!list.length) box.appendChild(el('<p class="muted">Keine Bestellungen in dieser Kategorie.</p>'));
+    list.forEach(o=>{ const {primary,badges}=categorize(o,state.settings,now); const meta=CAT_META[primary]||{};
+      const it=el('<div class="list-item"></div>');
+      it.innerHTML='<div style="flex:1;min-width:0"><div class="o-top"><span class="o-name">'+esc(o.name)+'</span> <span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span></div><div class="o-cust">'+esc(o.customerName||o.customerEmail||"—")+'</div><div class="o-badges">'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div><div style="text-align:right"><div class="o-total">'+esc(fmtMoney(o.totalPrice,o.currency))+'</div><div class="tiny muted">'+esc(fmtDate(o.createdAt))+'</div></div>';
+      it.onclick=()=>nav("#/bestellung/"+encodeURIComponent(o.name));
+      box.appendChild(it);
+    });
+    wrap.appendChild(box);
+  }
+  app.appendChild(wrap);
+}
+function orderCard(o,now){
+  const {primary,badges}=categorize(o,state.settings,now);
+  const c=el('<div class="ocard"></div>');
+  const perso=personalizationSummary(o);
+  c.innerHTML='<div class="o-top"><span class="o-name">'+esc(o.name)+'</span><span class="o-total">'+esc(fmtMoney(o.totalPrice,o.currency))+'</span></div>'+
+    '<div class="o-cust">'+esc(o.customerName||o.customerEmail||"—")+'</div>'+
+    '<div class="o-meta">'+esc(fmtDate(o.createdAt))+(perso?' · '+esc(perso):"")+'</div>'+
+    (badges.length?'<div class="o-badges">'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div>':"");
+  c.onclick=()=>nav("#/bestellung/"+encodeURIComponent(o.name));
+  return c;
+}
+function personalizationSummary(o){
+  const li=(o.lineItems||[])[0]; if(!li) return "";
+  const p=li.properties||{}; const parts=[];
+  Object.keys(p).forEach(k=>{ if(/Augenfarbe.*Beschreibung/i.test(k)&&p[k]) parts.push(p[k]); });
+  Object.keys(p).forEach(k=>{ if(/^Buchstabe/i.test(k)&&p[k]&&!/Kein/i.test(k)) parts.push("Buchst. "+p[k]); });
+  return parts.slice(0,3).join(", ");
+}
+
+function viewOrderDetail(app,name){
+  const o=state.orders[name]; if(!o){ app.appendChild(emptyBlock("Bestellung nicht gefunden","","#/bestellungen","Zurück")); return; }
+  const now=Date.now(); const {primary,badges}=categorize(o,state.settings,now); const meta=CAT_META[primary]||{}; const m=o.miris||{};
+  const wrap=el('<div></div>');
+  wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/bestellungen">‹ Zurück</a></div><h1 style="margin-top:10px">'+esc(o.name)+'</h1><div class="row" style="margin-top:6px"><span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span>'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div>';
+
+  // Stammdaten
+  const info=el('<div class="card"></div>');
+  info.innerHTML='<h2 style="font-size:14px;margin-bottom:8px">Bestellung</h2>'+
+    kv("Kunde",esc(o.customerName||"—"))+
+    kv("E-Mail",o.customerEmail?'<a href="mailto:'+esc(o.customerEmail)+'" style="text-decoration:underline">'+esc(o.customerEmail)+'</a>':"—")+
+    kv("Datum",esc(fmtDateTime(o.createdAt)))+
+    kv("Summe",esc(fmtMoney(o.totalPrice,o.currency)))+
+    kv("Zahlung",esc(o.financialStatus||"—"))+
+    kv("Versand",esc(o.fulfillmentStatus||"—"))+
+    (m.approval_status?kv("Vorschau-Status",esc(prettyToken(m.approval_status))):"")+
+    (m.customer_decision?kv("Kunden-Entscheid",esc(prettyToken(m.customer_decision))):"")+
+    (m.repair_status?kv("Reparatur",esc(prettyToken(m.repair_status))+(m.repair_code?" · "+esc(m.repair_code):"")):"");
+  const links=[];
+  if(o.adminUrl) links.push('<a class="btn btn-sm btn-ghost" href="'+esc(o.adminUrl)+'" target="_blank" rel="noopener">Shopify-Admin ↗</a>');
+  if(m.approval_url) links.push('<a class="btn btn-sm btn-ghost" href="'+esc(m.approval_url)+'" target="_blank" rel="noopener">Farbvorschau ↗</a>');
+  if(links.length) info.appendChild(el('<div class="row" style="margin-top:12px">'+links.join("")+'</div>'));
+  wrap.appendChild(info);
+
+  // Personalisierung + Bilder
+  const li=(o.lineItems||[])[0];
+  if(li){ const p=li.properties||{}; const pc=el('<div class="card"></div>'); pc.innerHTML='<h2 style="font-size:14px;margin-bottom:8px">Personalisierung</h2>';
+    Object.keys(p).forEach(k=>{ if(p[k]&&!isCloudinary(p[k])) pc.appendChild(el(kv(esc(k),esc(p[k])))); });
+    const imgs=[]; Object.keys(p).forEach(k=>{ if(isCloudinary(p[k])) imgs.push({k,u:p[k]}); });
+    if(m.preview_url) imgs.push({k:"Farbvorschau",u:m.preview_url});
+    if(imgs.length){ const ig=el('<div class="imgrid" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"></div>'); imgs.forEach(im=>{ ig.appendChild(el('<a href="'+esc(im.u)+'" target="_blank" rel="noopener" title="'+esc(im.k)+'"><img class="thumb" src="'+esc(im.u)+'" alt="'+esc(im.k)+'" loading="lazy"></a>')); }); pc.appendChild(ig); }
+    wrap.appendChild(pc);
+  }
+
+  // Workflow-Toggles
+  const wf=el('<div class="card"></div>'); wf.innerHTML='<h2 style="font-size:14px;margin-bottom:6px">Arbeitsschritte (lokal)</h2>';
+  wf.appendChild(toggleRow("Farbvorschau gesendet",!!o.local.previewSentAt,(on)=>{ o.local.previewSentAt=on?Date.now():null; saveOrders(); render(); }));
+  wf.appendChild(toggleRow("Mahnung geschickt",!!o.local.mahnungSentAt,(on)=>{ o.local.mahnungSentAt=on?Date.now():null; saveOrders(); render(); }));
+  wf.appendChild(toggleRow("Als versendet markiert",!!o.local.shippedMarkedAt,(on)=>{ o.local.shippedMarkedAt=on?Date.now():null; saveOrders(); render(); }));
+  wf.appendChild(toggleRow("Erledigt / archiviert",!!o.local.done,(on)=>{ o.local.done=on; saveOrders(); render(); }));
+  // manual category
+  const mcRow=el('<div class="toggle-row"><span class="t-l">Kategorie manuell überschreiben</span></div>');
+  const mcSel=el('<select style="max-width:220px"><option value="">— automatisch —</option>'+CATS.map(c=>'<option value="'+esc(c)+'"'+(o.local.manualCategory===c?" selected":"")+'>'+esc(c)+'</option>').join("")+'</select>');
+  mcSel.onchange=()=>{ o.local.manualCategory=mcSel.value||null; saveOrders(); render(); }; mcRow.appendChild(mcSel); wf.appendChild(mcRow);
+  wrap.appendChild(wf);
+
+  // Notizen + Aufgabe
+  const nc=el('<div class="card"></div>'); nc.innerHTML='<h2 style="font-size:14px;margin-bottom:8px">Interne Notiz</h2>';
+  const ta=el('<textarea placeholder="Notiz zu dieser Bestellung…">'+esc(o.local.notes||"")+'</textarea>'); ta.onchange=()=>{ o.local.notes=ta.value; saveOrders(); toast("Notiz gespeichert"); }; nc.appendChild(ta);
+  const taskBtn=el('<button class="btn btn-sm btn-ghost" style="margin-top:10px">+ Aufgabe für diese Bestellung</button>');
+  taskBtn.onclick=()=>addTaskFor({linkedOrder:o.name, text:"Farbvorschau erstellen für "+o.name});
+  nc.appendChild(taskBtn);
+  wrap.appendChild(nc);
+
+  app.appendChild(wrap);
+}
+function kv(k,v){ return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
+function toggleRow(label,on,cb){ const row=el('<div class="toggle-row"><span class="t-l">'+esc(label)+'</span></div>'); const sw=el('<label class="switch"><input type="checkbox" '+(on?"checked":"")+'><span class="sl"></span></label>'); sw.querySelector("input").onchange=(e)=>cb(e.target.checked); row.appendChild(sw); return row; }
+
+function viewAnliegen(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Anliegen-Inbox","Kundenanfragen aus dem KI-Chat & Widerrufe – hier abhaken.");
+  const list=Object.values(state.anliegen).sort((a,b)=>b.date-a.date);
+  // filter
+  const ctl=el('<div class="row" style="margin-bottom:12px"></div>');
+  const f=state.ui.anliegenFilter;
+  const fSel=el('<select style="max-width:220px"><option value="alle">Alle ('+list.length+')</option><option value="offen">Offen</option><option value="in Arbeit">In Arbeit</option><option value="erledigt">Erledigt</option>'+ANLIEGEN_KINDS.map(k=>'<option value="kind:'+esc(k)+'">'+esc(k)+'</option>').join("")+'</select>');
+  fSel.value=f; ctl.appendChild(fSel); ctl.appendChild(el('<span class="spacer"></span>'));
+  const addBtn=el('<button class="btn btn-sm btn-ghost">+ Manuell / E-Mail einfügen</button>'); addBtn.onclick=openEmailPaste; ctl.appendChild(addBtn);
+  wrap.appendChild(ctl);
+  fSel.onchange=()=>{ state.ui.anliegenFilter=fSel.value; render(); };
+
+  let shown=list;
+  if(f==="offen"||f==="in Arbeit"||f==="erledigt") shown=list.filter(a=>a.status===f);
+  else if(f.startsWith("kind:")) shown=list.filter(a=>a.kind===f.slice(5));
+
+  if(!shown.length){ wrap.appendChild(emptyBlock("Keine Anliegen","Kundenanfragen erscheinen hier – per Snapshot, Live-Sync oder E-Mail-Einfügen.","",null,openEmailPaste,"E-Mail einfügen")); app.appendChild(wrap); return; }
+
+  shown.forEach(a=>{
+    const kindK={"Widerruf":"warn","Feedback":"info","Adressänderung":"info","Chat-Nachricht":"muted","Sonstiges":"muted"}[a.kind]||"muted";
+    const done=a.status==="erledigt";
+    const it=el('<div class="card" style="padding:14px"></div>');
+    it.innerHTML='<div class="row" style="align-items:flex-start"><div style="flex:1;min-width:0">'+
+      '<div class="row" style="gap:6px"><span class="badge '+kindK+'">'+esc(a.kind)+'</span>'+(a.relatedOrder?'<span class="badge">'+esc(a.relatedOrder)+'</span>':"")+'<span class="badge '+(a.status==="offen"?"warn":a.status==="erledigt"?"ok":"info")+'">'+esc(a.status)+'</span></div>'+
+      '<div style="font-weight:700;margin-top:8px">'+esc(a.thema||"—")+'</div>'+
+      '<div class="small" style="margin-top:4px;white-space:pre-wrap">'+esc(a.nachricht||"")+'</div>'+
+      '<div class="tiny muted" style="margin-top:8px">'+esc(a.customerName||"")+(a.customerEmail?" · "+esc(a.customerEmail):"")+' · '+esc(fmtDateTime(a.date))+'</div>'+
+      '</div></div>';
+    const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
+    if(a.customerEmail) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="mailto:'+esc(a.customerEmail)+'?subject='+encodeURIComponent("Deine Anfrage an M.IRIS")+'">Antworten</a>'));
+    if(a.widerrufAdminUrl) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+esc(a.widerrufAdminUrl)+'" target="_blank" rel="noopener">Widerruf öffnen ↗</a>'));
+    if(a.relatedOrder && state.orders[a.relatedOrder]) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="#/bestellung/'+encodeURIComponent(a.relatedOrder)+'">Bestellung</a>'));
+    const taskB=el('<button class="btn btn-sm btn-ghost">+ Aufgabe</button>'); taskB.onclick=()=>addTaskFor({linkedAnliegen:a.id,text:(a.thema||a.kind)+(a.relatedOrder?" ("+a.relatedOrder+")":"")}); acts.appendChild(taskB);
+    const statusB=el('<button class="btn btn-sm '+(done?"btn-ghost":"btn-primary")+'">'+(done?"Wieder öffnen":"Erledigt ✓")+'</button>');
+    statusB.onclick=()=>{ a.status=done?"offen":"erledigt"; a.updatedAt=Date.now(); saveAnliegen(); render(); };
+    acts.appendChild(el('<span class="spacer"></span>')); acts.appendChild(statusB);
+    it.appendChild(acts);
+    wrap.appendChild(it);
+  });
+  app.appendChild(wrap);
+}
+function openEmailPaste(){
+  const m=showModal('<h2>E-Mail / Anliegen einfügen</h2><p class="muted small">Füge den Text einer "Chat-Nachricht"-, "Feedback"- oder Widerruf-Mail ein. Das Cockpit erkennt Art, Kunde, Thema & Bestellnummer automatisch.</p><label class="field"><span>E-Mail-Text</span><textarea id="ep-in" style="min-height:160px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Erkennen & speichern</button></div>');
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  m.querySelector('[data-x=yes]').onclick=()=>{ const t=m.querySelector("#ep-in").value.trim(); if(!t){ toast("Bitte Text einfügen"); return; } const parsed=parseEmail(t); const r=mergeAnliegen([parsed]); closeModal(); toast((r.added?"Anliegen gespeichert":"Aktualisiert")+" ("+parsed.kind+")"); render(); };
+}
+
+function viewGaps(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("KI-Wissenslücken","Fragen, bei denen Mary nicht weiterhelfen konnte – Backlog für die Wissensbasis.");
+  const ctl=el('<div class="row" style="margin-bottom:12px"></div>');
+  const runBtn=el('<button class="btn btn-sm btn-primary">◐ Aus Anliegen analysieren</button>'); runBtn.onclick=()=>runGapsFromAnliegen(runBtn); ctl.appendChild(runBtn);
+  const pasteBtn=el('<button class="btn btn-sm btn-ghost">Chat-Text einfügen…</button>'); pasteBtn.onclick=openGapPaste; ctl.appendChild(pasteBtn);
+  wrap.appendChild(ctl);
+  if(!state.settings.apiKey) wrap.appendChild(el('<div class="notice warn"><span class="ni">🔑</span><div>Für die KI-Analyse brauchst du einen Anthropic-Schlüssel. <a href="#/einstellungen" style="text-decoration:underline">In den Einstellungen eintragen</a> (bleibt nur auf diesem Gerät).</div></div>'));
+
+  const gaps=Object.values(state.gaps).sort((a,b)=>b.haeufigkeit-a.haeufigkeit||b.createdAt-a.createdAt);
+  if(!gaps.length){ wrap.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◐</div><p>Noch keine Wissenslücken erfasst. Analysiere deine Anliegen oder füge einen Chat-Verlauf ein – die KI extrahiert die unbeantworteten Fragen.</p></div></div>')); app.appendChild(wrap); return; }
+  gaps.forEach(g=>{
+    const it=el('<div class="card" style="padding:14px"></div>');
+    const sk={neu:"warn",geplant:"info",eingebaut:"ok"}[g.status]||"muted";
+    it.innerHTML='<div class="row"><span class="badge '+sk+'">'+esc(g.status)+'</span><span class="badge">'+g.haeufigkeit+'×</span><span class="spacer"></span></div>'+
+      '<div style="font-weight:700;margin-top:8px">'+esc(g.frage)+'</div>'+
+      (g.kontext?'<div class="small muted" style="margin-top:4px">'+esc(g.kontext)+'</div>':"")+
+      (g.vorgeschlagene_antwort?'<div class="small" style="margin-top:8px;padding:8px;background:var(--surface2)"><b>Vorschlag:</b> '+esc(g.vorgeschlagene_antwort)+'</div>':"");
+    const acts=el('<div class="row" style="margin-top:12px;gap:6px"></div>');
+    ["neu","geplant","eingebaut"].forEach(s=>{ const b=el('<button class="btn btn-sm '+(g.status===s?"btn-primary":"btn-ghost")+'">'+s+'</button>'); b.onclick=()=>{ g.status=s; saveGaps(); render(); }; acts.appendChild(b); });
+    acts.appendChild(el('<span class="spacer"></span>'));
+    const del=el('<button class="btn btn-sm btn-danger">Löschen</button>'); del.onclick=async()=>{ if(await confirmDialog("Löschen?","Diese Wissenslücke entfernen?","Löschen",true)){ delete state.gaps[g.id]; saveGaps(); render(); } }; acts.appendChild(del);
+    it.appendChild(acts);
+    wrap.appendChild(it);
+  });
+  app.appendChild(wrap);
+}
+function serializeAnliegenForAI(){
+  const list=Object.values(state.anliegen);
+  if(!list.length) return "";
+  return list.map((a,i)=>(i+1)+". ["+a.kind+"] Thema: "+(a.thema||"")+" | Nachricht: "+(a.nachricht||"")).join("\n");
+}
+async function runGapsFromAnliegen(btn){
+  const input=serializeAnliegenForAI();
+  if(!input){ toast("Keine Anliegen vorhanden – zuerst importieren."); return; }
+  await runGapsWith(input,btn);
+}
+function openGapPaste(){
+  const m=showModal('<h2>Chat-Text analysieren</h2><p class="muted small">Füge Chat-Verläufe oder Kundenanfragen ein. Die KI extrahiert die Fragen, bei denen Mary nicht helfen konnte.</p><label class="field"><span>Text</span><textarea id="gp-in" style="min-height:180px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Analysieren</button></div>');
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  m.querySelector('[data-x=yes]').onclick=()=>{ const t=m.querySelector("#gp-in").value.trim(); if(!t){ toast("Bitte Text einfügen"); return; } closeModal(); runGapsWith(t,null); };
+}
+async function runGapsWith(input,btn){
+  if(!state.settings.apiKey){ nav("#/einstellungen"); toast("Bitte zuerst API-Schlüssel eintragen"); return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin"></span> Analysiere…'; }
+  toast("KI analysiert…",6000);
+  try{ const luecken=await runGapExtraction(input); const r=mergeGaps(luecken); toast(r.added?(r.added+" neue Wissenslücke(n) ✓"):"Keine neuen Lücken gefunden"); render(); }
+  catch(e){ toast(e.message||"Fehler bei der Analyse",4000); if(btn){ btn.disabled=false; btn.textContent="◐ Aus Anliegen analysieren"; } }
+}
+
+function viewGdpr(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Augenbilder / DSGVO","Kundenfotos & Chats – markieren, löschen, dokumentieren.");
+  wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Kundenchats:</b> Der Mary-Chat ist serverseitig flüchtig (30-Min-TTL, keine Speicherung) – es gibt aktuell nichts zu löschen. Sobald das Backend Transkripte speichert (Phase 3), erscheinen sie hier zum Löschen.</div></div>'));
+
+  const imgs=Object.values(state.images);
+  if(!imgs.length){ wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Keine Augenbilder erfasst. Bilder werden automatisch aus deinen Bestellungen (Line-Item "Auge N Bild") abgeleitet, sobald du Bestellungen importierst.</p></div></div>')); app.appendChild(wrap); return; }
+
+  const flagged=imgs.filter(im=>im.flaggedForDeletion&&!im.deletedAt);
+  const stat=el('<div class="row" style="margin:14px 0"><span class="badge">'+imgs.length+' Bilder</span><span class="badge warn">'+flagged.length+' zum Löschen</span><span class="badge ok">'+imgs.filter(im=>im.deletedAt).length+' gelöscht</span><span class="spacer"></span></div>');
+  if(flagged.length){ const exp=el('<button class="btn btn-sm btn-ghost">Löschliste kopieren</button>'); exp.onclick=()=>copyDeletionList(flagged); stat.appendChild(exp);
+    if(liveConfigured()){ const delAll=el('<button class="btn btn-sm btn-danger">Alle '+flagged.length+' live löschen</button>'); delAll.onclick=()=>liveDeleteImages(flagged); stat.appendChild(delAll); } }
+  wrap.appendChild(stat);
+
+  const grid=el('<div class="imgrid"></div>');
+  imgs.sort((a,b)=>b.ageDays-a.ageDays).forEach(im=>{
+    const card=el('<div class="card" style="padding:10px"></div>');
+    card.innerHTML='<a href="'+esc(im.imageUrl)+'" target="_blank" rel="noopener"><img class="thumb" style="width:100%;height:120px" src="'+esc(im.imageUrl)+'" loading="lazy" alt="Augenbild"></a>'+
+      '<div class="tiny" style="margin-top:6px"><b>'+esc(im.orderName||"—")+'</b> · '+esc(im.label||"")+'</div>'+
+      '<div class="tiny muted">'+im.ageDays+' Tage alt</div>'+
+      (im.deletedAt?'<div class="badge ok" style="margin-top:6px">gelöscht '+esc(fmtDate(im.deletedAt))+'</div>':"");
+    if(!im.deletedAt){ const row=el('<div class="row" style="margin-top:8px;gap:6px"></div>');
+      const flag=el('<button class="btn btn-sm '+(im.flaggedForDeletion?"btn-primary":"btn-ghost")+'">'+(im.flaggedForDeletion?"✓ markiert":"markieren")+'</button>');
+      flag.onclick=()=>{ im.flaggedForDeletion=!im.flaggedForDeletion; saveImages(); render(); }; row.appendChild(flag);
+      const done=el('<button class="btn btn-sm btn-ghost">gelöscht</button>'); done.onclick=()=>{ im.deletedAt=Date.now(); im.flaggedForDeletion=false; saveImages(); render(); }; row.appendChild(done);
+      card.appendChild(row);
+    }
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+  app.appendChild(wrap);
+}
+function copyDeletionList(list){
+  const txt=list.map(im=>im.cloudinaryPublicId+"\t"+im.orderName+"\t"+im.imageUrl).join("\n");
+  copyText("Cloudinary public_id\tBestellung\tURL\n"+txt);
+  toast("Löschliste kopiert – an Claude/Cloudinary übergeben");
+}
+async function liveDeleteImages(list){
+  if(!await confirmDialog("Live löschen?",list.length+" Bild(er) endgültig aus Cloudinary löschen? Das kann nicht rückgängig gemacht werden.","Löschen",true)) return;
+  let ok=0;
+  for(const im of list){ try{ await liveFetch("/admin/images/delete",{method:"POST",body:JSON.stringify({publicId:im.cloudinaryPublicId,orderName:im.orderName})}); im.deletedAt=Date.now(); im.flaggedForDeletion=false; ok++; }catch(e){ toast("Fehler bei "+im.orderName+": "+e.message,4000); } }
+  saveImages(); toast(ok+" Bild(er) gelöscht"); render();
+}
+
+function viewCalendar(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Kalender & Aufgaben","Plane deine Arbeit – Tag antippen zum Bearbeiten.");
+  const base=state.ui.calMonth?new Date(state.ui.calMonth):new Date(); base.setDate(1);
+  const y=base.getFullYear(), mo=base.getMonth();
+  const head=el('<div class="row" style="margin-bottom:12px"><button class="btn btn-sm btn-ghost" id="pm">‹</button><h2 style="font-size:16px;min-width:170px;text-align:center">'+base.toLocaleDateString("de-DE",{month:"long",year:"numeric"})+'</h2><button class="btn btn-sm btn-ghost" id="nm">›</button><span class="spacer"></span><button class="btn btn-sm btn-primary" id="today">Heute</button></div>');
+  wrap.appendChild(head);
+  const cal=el('<div class="cal"></div>');
+  ["Mo","Di","Mi","Do","Fr","Sa","So"].forEach(d=>cal.appendChild(el('<div class="dow">'+d+'</div>')));
+  let first=new Date(y,mo,1).getDay(); first=(first===0)?6:first-1; // Montag=0
+  const daysInMonth=new Date(y,mo+1,0).getDate(); const prevDays=new Date(y,mo,0).getDate();
+  const todayS=todayStr();
+  for(let i=0;i<first;i++){ const d=prevDays-first+1+i; cal.appendChild(el('<div class="cell other"><span class="cnum">'+d+'</span></div>')); }
+  for(let d=1;d<=daysInMonth;d++){ const ds=todayStr(new Date(y,mo,d)); const tasks=state.days[ds]||[]; const open=tasks.filter(t=>!t.done).length; const doneN=tasks.filter(t=>t.done).length;
+    const cell=el('<div class="cell'+(ds===todayS?" today":"")+'"><span class="cnum">'+d+'</span></div>');
+    if(tasks.length){ let dots=""; for(let i=0;i<Math.min(open,4);i++) dots+='<span class="open"></span>'; for(let i=0;i<Math.min(doneN,4-Math.min(open,4));i++) dots+='<span></span>'; cell.appendChild(el('<div class="cdot">'+dots+'</div>')); }
+    cell.onclick=()=>nav("#/tag/"+ds); cal.appendChild(cell);
+  }
+  wrap.appendChild(cal);
+  // upcoming
+  const up=el('<div class="card" style="margin-top:16px"><h2 style="font-size:14px;margin-bottom:8px">Nächste offene Aufgaben</h2></div>');
+  const upcoming=[]; Object.keys(state.days).sort().forEach(ds=>{ (state.days[ds]||[]).forEach(t=>{ if(!t.done) upcoming.push({ds,t}); }); });
+  if(!upcoming.length) up.appendChild(el('<p class="muted small">Keine offenen Aufgaben.</p>'));
+  upcoming.slice(0,8).forEach(({ds,t})=>{ const row=el('<div class="toggle-row"><span class="t-l">'+esc(t.text)+' <span class="tiny muted">· '+esc(fmtDate(new Date(ds)))+'</span></span></div>'); const b=el('<button class="btn btn-sm btn-ghost">✓</button>'); b.onclick=()=>{ t.done=true; saveDays(); render(); }; row.appendChild(b); up.appendChild(row); });
+  wrap.appendChild(up);
+  app.appendChild(wrap);
+  head.querySelector("#pm").onclick=()=>{ state.ui.calMonth=new Date(y,mo-1,1).toISOString(); render(); };
+  head.querySelector("#nm").onclick=()=>{ state.ui.calMonth=new Date(y,mo+1,1).toISOString(); render(); };
+  head.querySelector("#today").onclick=()=>{ state.ui.calMonth=null; nav("#/tag/"+todayStr()); };
+}
+function viewDay(app,ds){
+  ds=ds||todayStr(); if(!/^\d{4}-\d{2}-\d{2}$/.test(ds)) ds=todayStr();
+  const wrap=el('<div></div>'); wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/kalender">‹ Kalender</a></div><h1 style="margin-top:10px">'+esc(new Date(ds).toLocaleDateString("de-DE",{weekday:"long",day:"2-digit",month:"long"}))+'</h1></div>';
+  const addRow=el('<div class="row" style="margin-bottom:12px"><input type="text" id="nt" placeholder="Neue Aufgabe…" style="flex:1"><button class="btn btn-primary" id="add">Hinzufügen</button></div>');
+  wrap.appendChild(addRow);
+  const tasks=state.days[ds]||[];
+  const box=el('<div class="card"></div>');
+  if(!tasks.length) box.appendChild(el('<p class="muted small">Noch keine Aufgaben für diesen Tag.</p>'));
+  tasks.forEach(t=>{ const row=el('<div class="toggle-row"></div>');
+    const lbl=el('<span class="t-l">'+(t.priority===2?'<span class="badge danger" style="margin-right:6px">!</span>':t.priority===1?'<span class="badge warn" style="margin-right:6px">•</span>':"")+(t.done?'<s class="muted">':"")+esc(t.text)+(t.done?"</s>":"")+(t.linkedOrder?' <a class="tiny" href="#/bestellung/'+encodeURIComponent(t.linkedOrder)+'" style="text-decoration:underline">'+esc(t.linkedOrder)+'</a>':"")+'</span>');
+    row.appendChild(lbl);
+    const pr=el('<button class="btn btn-sm btn-ghost" title="Priorität">'+["–","•","!"][t.priority||0]+'</button>'); pr.onclick=()=>{ t.priority=((t.priority||0)+1)%3; saveDays(); render(); }; row.appendChild(pr);
+    const chk=el('<label class="switch"><input type="checkbox" '+(t.done?"checked":"")+'><span class="sl"></span></label>'); chk.querySelector("input").onchange=(e)=>{ t.done=e.target.checked; saveDays(); render(); }; row.appendChild(chk);
+    const del=el('<button class="btn btn-sm btn-danger">✕</button>'); del.onclick=()=>{ state.days[ds]=tasks.filter(x=>x.id!==t.id); if(!state.days[ds].length) delete state.days[ds]; saveDays(); render(); }; row.appendChild(del);
+    box.appendChild(row);
+  });
+  wrap.appendChild(box);
+  app.appendChild(wrap);
+  const doAdd=()=>{ const v=addRow.querySelector("#nt").value.trim(); if(!v) return; if(!state.days[ds]) state.days[ds]=[]; state.days[ds].push({id:uid(),text:v,done:false,priority:0,linkedOrder:null,linkedAnliegen:null,createdAt:Date.now()}); saveDays(); render(); };
+  addRow.querySelector("#add").onclick=doAdd; addRow.querySelector("#nt").addEventListener("keydown",e=>{ if(e.key==="Enter") doAdd(); });
+}
+function addTaskFor(opts){
+  const ds=todayStr();
+  promptModal("Aufgabe planen","Aufgabe (heute)",opts.text||"").then(v=>{ if(v==null) return; const text=String(v).trim(); if(!text) return;
+    if(!state.days[ds]) state.days[ds]=[]; state.days[ds].push({id:uid(),text,done:false,priority:0,linkedOrder:opts.linkedOrder||null,linkedAnliegen:opts.linkedAnliegen||null,createdAt:Date.now()}); saveDays(); toast("Aufgabe für heute angelegt"); render(); });
+}
+
+function viewImport(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Import / Sync","Daten ins Cockpit holen – live, per Snapshot, CSV oder E-Mail.");
+  // live
+  const live=el('<div class="card"></div>');
+  live.innerHTML='<h2 style="font-size:15px">Live-Sync</h2><p class="muted small" style="margin:6px 0 12px">'+(liveConfigured()?"Backend hinterlegt. Holt Bestellungen (und ab Phase 3 Anliegen/Bilder) direkt aus deinem Admin-Dienst.":"Noch kein Backend hinterlegt. Trage Backend-URL & Admin-Token in den Einstellungen ein, sobald der Dienst läuft (Phase 2).")+'</p>';
+  const lb=el('<button class="btn '+(liveConfigured()?"btn-primary":"btn-ghost")+'" '+(liveConfigured()?"":"disabled")+'>⟳ Jetzt live synchronisieren</button>'); lb.onclick=()=>doLiveSync(); live.appendChild(lb);
+  if(!liveConfigured()) live.appendChild(el('<a class="btn btn-ghost" href="#/einstellungen" style="margin-left:8px">Zu den Einstellungen</a>'));
+  wrap.appendChild(live);
+
+  // snapshot
+  const snap=el('<div class="card"></div>');
+  snap.innerHTML='<h2 style="font-size:15px">Daten-Snapshot (JSON)</h2><p class="muted small" style="margin:6px 0 10px">Bitte Claude um einen aktuellen Snapshot (Bestellungen + Anliegen + Bilder aus Shopify/Gmail) und füge ihn hier ein. Bestehende lokale Markierungen bleiben erhalten.</p>';
+  const promptBtn=el('<button class="btn btn-sm btn-ghost">Claude-Prompt kopieren</button>'); promptBtn.onclick=()=>{ copyText(SNAPSHOT_PROMPT); toast("Prompt kopiert – an Claude senden"); }; snap.appendChild(promptBtn);
+  const ta=el('<textarea id="snap-in" placeholder=\'{ "snapshotVersion":1, "orders":[…], "anliegen":[…] }\' style="min-height:120px;margin-top:10px"></textarea>'); snap.appendChild(ta);
+  const sb=el('<button class="btn btn-primary" style="margin-top:8px">Snapshot importieren</button>'); sb.onclick=()=>{ try{ const r=importSnapshot(ta.value); toast("Import: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert · "+r.anliegen.added+" Anliegen"); render(); }catch(e){ toast(e.message,4000); } }; snap.appendChild(sb);
+  wrap.appendChild(snap);
+
+  // CSV
+  const csv=el('<div class="card"></div>');
+  csv.innerHTML='<h2 style="font-size:15px">Shopify-CSV</h2><p class="muted small" style="margin:6px 0 10px">Shopify-Bestellexport (CSV). Hinweis: die CSV enthält keine Farbvorschau-Metafelder – diese Spalten bleiben leer und werden über lokale Schalter gepflegt.</p>';
+  const file=el('<input type="file" accept=".csv,text/csv">'); file.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const r=importCSV(rd.result); toast("CSV: "+r.added+" neu, "+r.updated+" aktualisiert"); render(); }catch(err){ toast(err.message,4000); } }; rd.readAsText(f); }; csv.appendChild(file);
+  wrap.appendChild(csv);
+
+  // email
+  const eml=el('<div class="card"></div>');
+  eml.innerHTML='<h2 style="font-size:15px">E-Mail einfügen</h2><p class="muted small" style="margin:6px 0 10px">"Chat-Nachricht"-, "Feedback"- oder Widerruf-Mail als Anliegen erfassen.</p>';
+  const eb=el('<button class="btn btn-ghost">E-Mail-Text einfügen…</button>'); eb.onclick=openEmailPaste; eml.appendChild(eb);
+  wrap.appendChild(eml);
+
+  app.appendChild(wrap);
+}
+async function doLiveSync(){
+  if(!liveConfigured()){ nav("#/einstellungen"); return; }
+  toast("Synchronisiere…",6000);
+  try{ const r=await liveSyncAll(); toast("Live: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert"); render(); }
+  catch(e){ toast(e.message||"Sync fehlgeschlagen",5000); }
+}
+
+function viewSettings(app){
+  const s=state.settings; const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Einstellungen","");
+  // KI
+  const ai=el('<div class="card"></div>'); ai.innerHTML='<h2 style="font-size:15px">KI (Anthropic)</h2><p class="muted small" style="margin:6px 0 12px">Für die Wissenslücken-Analyse. Der Schlüssel bleibt nur auf diesem Gerät (localStorage) und ist nie im Backup enthalten.</p>';
+  ai.appendChild(field("API-Schlüssel",'<input type="password" id="s-key" value="'+esc(s.apiKey)+'" placeholder="sk-ant-…" autocomplete="off">'));
+  ai.appendChild(field("Modell",'<select id="s-model">'+AI_MODELS.map(m=>'<option value="'+m.id+'"'+(s.model===m.id?" selected":"")+'>'+esc(m.label)+'</option>').join("")+'</select>'));
+  wrap.appendChild(ai);
+  // backend
+  const be=el('<div class="card"></div>'); be.innerHTML='<h2 style="font-size:15px">Live-Backend (Admin-Dienst)</h2><p class="muted small" style="margin:6px 0 12px">Sobald dein Admin-Dienst läuft (Phase 2): URL + Admin-Token eintragen. Beide bleiben nur auf diesem Gerät und sind nie im Backup.</p>';
+  be.appendChild(field("Backend-URL",'<input type="text" id="s-url" value="'+esc(s.backendUrl)+'" placeholder="https://miris-cockpit-api.…">'));
+  be.appendChild(field("Admin-Token",'<input type="password" id="s-token" value="'+esc(s.adminToken)+'" placeholder="Bearer-Token" autocomplete="off">'));
+  wrap.appendChild(be);
+  // business
+  const biz=el('<div class="card"></div>'); biz.innerHTML='<h2 style="font-size:15px">Geschäftslogik</h2>';
+  biz.appendChild(field("Mahnung fällig nach (Tagen)",'<input type="number" id="s-mahn" value="'+num(s.mahnungDays,7)+'" min="1" max="90">'));
+  wrap.appendChild(biz);
+  // save
+  const saveBtn=el('<button class="btn btn-primary btn-block" style="margin-top:4px">Speichern</button>');
+  saveBtn.onclick=()=>{ s.apiKey=wrap.querySelector("#s-key").value.trim(); s.model=wrap.querySelector("#s-model").value; s.backendUrl=wrap.querySelector("#s-url").value.trim(); s.adminToken=wrap.querySelector("#s-token").value.trim(); s.mahnungDays=Math.max(1,num(wrap.querySelector("#s-mahn").value,7)); saveSettings(); toast("Gespeichert"); renderChrome(parseRoute().name); };
+  wrap.appendChild(saveBtn);
+  // data
+  const data=el('<div class="card"></div>'); data.innerHTML='<h2 style="font-size:15px">Daten</h2><p class="muted small" style="margin:6px 0 12px">Backup enthält keine Schlüssel/Token.</p>';
+  const expB=el('<button class="btn btn-ghost">Backup exportieren</button>'); expB.onclick=exportBackup; data.appendChild(expB);
+  const impB=el('<label class="btn btn-ghost" style="margin-left:8px">Backup importieren<input type="file" accept=".json" style="display:none"></label>'); impB.querySelector("input").onchange=(e)=>importBackup(e.target.files[0]); data.appendChild(impB);
+  const clrB=el('<button class="btn btn-danger" style="margin-left:8px">Alle Daten löschen</button>'); clrB.onclick=async()=>{ if(await confirmDialog("Alles löschen?","Wirklich ALLE lokalen Cockpit-Daten löschen? Backup vorher exportieren!","Alles löschen",true)){ Object.values(K).forEach(k=>Store.remove(k)); location.reload(); } }; data.appendChild(clrB);
+  wrap.appendChild(data);
+  // about
+  wrap.appendChild(el('<p class="muted tiny" style="margin-top:16px;text-align:center">M.IRIS Cockpit · Speicher: '+(Store.available?"localStorage":"nur Arbeitsspeicher (Achtung: nicht dauerhaft)")+' · Schema v'+SCHEMA_VERSION+'</p>'));
+  app.appendChild(wrap);
+}
+function field(label,inner){ return '<label class="field"><span>'+esc(label)+'</span>'+inner+'</label>'; }
+
+/* ---------- Backup ---------- */
+function exportBackup(){
+  const dump={ schemaVersion:SCHEMA_VERSION, exportedAt:new Date().toISOString(),
+    settings:Object.assign({},state.settings,{apiKey:"",adminToken:""}),
+    orders:state.orders, anliegen:state.anliegen, gaps:state.gaps, images:state.images, days:state.days };
+  const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="miris-cockpit-backup-"+todayStr()+".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast("Backup exportiert");
+}
+function importBackup(file){
+  if(!file) return; const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
+    if(d.orders) state.orders=mapSanitize(d.orders,sanitizeOrder,"name");
+    if(d.anliegen) state.anliegen=mapSanitize(d.anliegen,sanitizeAnliegen,"id");
+    if(d.gaps) state.gaps=mapSanitize(d.gaps,sanitizeGap,"id");
+    if(d.images) state.images=mapSanitize(d.images,sanitizeImage,"id");
+    if(d.days) state.days=sanitizeDays(d.days);
+    if(d.settings) state.settings=Object.assign({},state.settings,d.settings,{apiKey:state.settings.apiKey,adminToken:state.settings.adminToken});
+    persist(["orders","anliegen","gaps","images","days","settings"]); flushSaves(); toast("Backup importiert"); render();
+  }catch(e){ toast("Ungültiges Backup",4000); } }; rd.readAsText(file);
+}
+
+/* ---------- Utilities ---------- */
+function emptyBlock(title,text,href,btnLabel,onClick,onClickLabel){
+  const d=el('<div class="card"><div class="empty"><div class="e-ico">◦</div><h2 style="font-size:16px;margin-bottom:8px">'+esc(title)+'</h2><p>'+esc(text)+'</p></div></div>');
+  const box=d.querySelector(".empty");
+  if(href) box.appendChild(el('<a class="btn btn-primary" href="'+href+'">'+esc(btnLabel||"Öffnen")+'</a>'));
+  if(onClick){ const b=el('<button class="btn btn-ghost">'+esc(onClickLabel||btnLabel||"OK")+'</button>'); b.onclick=onClick; box.appendChild(b); }
+  return d;
+}
+function copyText(txt){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt); return; } }catch(e){} try{ const ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }catch(e){} }
+
+const SNAPSHOT_PROMPT=[
+"Erzeuge mir einen aktuellen M.IRIS-Cockpit-Snapshot als JSON (snapshotVersion 1).",
+"Nutze die Shopify- und Gmail-Tools:",
+"1) orders: alle offenen/relevanten Bestellungen mit name, customerName, customerEmail, createdAt (ISO),",
+"   totalPrice (Zahl), currency, financialStatus, fulfillmentStatus, lineItems[{title,quantity,properties}],",
+"   miris{approval_status,customer_decision,preview_url,approval_url,preview_sent_at,revision_count,repair_status,repair_code,internal_note},",
+"   adminUrl, isWiderruf.",
+"2) anliegen: aus meinen Gmail-Mails ('Chat-Nachricht von…','Feedback von…','Adressänderung…', Widerrufe von anviara)",
+"   je {date,kind,customerName,customerEmail,thema,nachricht,relatedOrder,widerrufAdminUrl}.",
+"Gib NUR das JSON aus."
+].join("\n");
+
+/* ---------- Demo-Daten (synthetisch) ---------- */
+function seedDemo(){
+  const now=Date.now(); const d=(days)=>new Date(now-days*86400000).toISOString();
+  const orders=[
+    { name:"B2001", customerName:"Lena Hoffmann", customerEmail:"lena.h@example.com", createdAt:d(2), totalPrice:29.99, currency:"EUR", financialStatus:"PENDING", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Grün-Blau","Buchstabe Armband 1":"L"}}], miris:{approval_status:"offen"}, adminUrl:"" },
+    { name:"B2002", customerName:"Jonas Weber", customerEmail:"jonas.weber@example.com", createdAt:d(11), totalPrice:49.99, currency:"EUR", financialStatus:"PENDING", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:2,properties:{"Augenfarbe 1 Beschreibung":"Braun","Augenfarbe 2 Beschreibung":"Haselnuss"}}], miris:{approval_status:"versandbereit",customer_decision:"freigegeben"}, adminUrl:"" },
+    { name:"B2003", customerName:"Aylin Kaya", customerEmail:"aylin.kaya@example.com", createdAt:d(4), totalPrice:29.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Grau","Auge 1 Bild":"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908441/kunden-augenfotos/demo1.jpg"}}], miris:{approval_status:"gesendet",preview_url:"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908617/miris/farbvorschau/demo.jpg",approval_url:"https://m-iris.de/apps/vorschau?order=demo",preview_sent_at:d(3)}, adminUrl:"" },
+    { name:"B2004", customerName:"Sophie Braun", customerEmail:"sophie.b@example.com", createdAt:d(6), totalPrice:29.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Blau","Auge 1 Bild":"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908441/kunden-augenfotos/demo2.jpg"}}], miris:{approval_status:"versandbereit",customer_decision:"automatisch_freigegeben",preview_url:"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908617/miris/farbvorschau/demo2.jpg"}, adminUrl:"" },
+    { name:"B2005", customerName:"Michail S.", customerEmail:"m.s@example.com", createdAt:d(9), totalPrice:0, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS Reparaturservice",quantity:1,properties:{}}], miris:{repair_status:"kostenlos_bestellung_erstellt",repair_code:"REP-DEMO-01"}, adminUrl:"" },
+    { name:"B2006", customerName:"Emma Fischer", customerEmail:"emma.f@example.com", createdAt:d(20), totalPrice:29.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"FULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Grün","Buchstabe Armband 1":"E"}}], miris:{approval_status:"versandbereit",customer_decision:"freigegeben"}, adminUrl:"" }
+  ];
+  mergeOrders(orders);
+  mergeAnliegen([
+    { date:now-86400000, kind:"Adressänderung", customerName:"Lena Hoffmann", customerEmail:"lena.h@example.com", thema:"Adressänderung B2001", nachricht:"Bitte an neue Adresse senden: Musterstr. 5, 40210 Düsseldorf.", relatedOrder:"B2001" },
+    { date:now-2*86400000, kind:"Chat-Nachricht", customerName:"Aylin Kaya", customerEmail:"aylin.kaya@example.com", thema:"Perlengröße", nachricht:"Kann ich zwischen zwei Perlengrößen wählen? Die KI wusste es nicht.", relatedOrder:"B2003" },
+    { date:now-3*86400000, kind:"Widerruf", customerName:"Jonas Weber", customerEmail:"jonas.weber@example.com", thema:"Widerruf B2002", nachricht:"Möchte vom Kauf zurücktreten.", relatedOrder:"B2002", widerrufAdminUrl:"https://admin.shopify.com/store/demo/withdrawals/1" }
+  ]);
+  const derived=deriveImagesFromOrders(); if(derived.length) mergeImages(derived);
+  state.importlog.lastSnapshotAt=now; saveImportlog();
+}
+
+/* ======================================================================
+   Init
+   ====================================================================== */
+function boot(){
+  try{ loadState(); }catch(e){ console.error(e); }
+  window.addEventListener("hashchange",render);
+  render();
+}
+boot();
+</script>
+</body>
+</html>
