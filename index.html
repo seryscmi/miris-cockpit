@@ -293,7 +293,8 @@ const CAT_META = {
   "Versendet":{k:"muted",ico:"✅"},
   "Erledigt":{k:"muted",ico:"🗄️"}
 };
-const ANLIEGEN_KINDS = ["Chat-Nachricht","Feedback","Adressänderung","Widerruf","Sonstiges"];
+const ANLIEGEN_KINDS = ["Chat-Nachricht","Feedback","Adressänderung","Widerruf","DSGVO","Reparatur","Sonstiges"];
+const ANLIEGEN_STATI = ["neu","in Arbeit","beantwortet","erledigt"];
 
 /* ---------- Sanitizer ---------- */
 function num(v,d){ const n=Number(v); return isFinite(n)?n:(d||0); }
@@ -332,14 +333,17 @@ function sanitizeAnliegen(a){
   if(!a || typeof a!=="object") return null;
   const id = a.id || hashId([a.date,a.subject||a.thema,a.customerEmail,a.nachricht].join("|"));
   const kind = ANLIEGEN_KINDS.includes(a.kind)?a.kind:"Sonstiges";
-  const status = ["offen","in Arbeit","erledigt"].includes(a.status)?a.status:"offen";
+  let status = a.status==="offen" ? "neu" : a.status; // Alt-Status migrieren
+  status = ANLIEGEN_STATI.includes(status)?status:"neu";
   return {
     id:String(id), date: tsMs(a.date)||Date.now(), kind,
     customerName: str(a.customerName,120), customerEmail: str(a.customerEmail,160),
     thema: str(a.thema,300), nachricht: str(a.nachricht,4000),
     relatedOrder: a.relatedOrder?str(a.relatedOrder,40):null,
     widerrufAdminUrl: a.widerrufAdminUrl?str(a.widerrufAdminUrl,400):null,
-    status, localNotes: str(a.localNotes,2000), updatedAt: tsMs(a.updatedAt)||Date.now()
+    status, localNotes: str(a.localNotes,2000), updatedAt: tsMs(a.updatedAt)||Date.now(),
+    replies: Array.isArray(a.replies)?a.replies.slice(0,20):null,
+    fromDb: !!a.fromDb
   };
 }
 function sanitizeGap(g){
@@ -386,7 +390,8 @@ const state = {
   settings:Object.assign({},DEFAULT_SETTINGS),
   orders:{}, anliegen:{}, gaps:{}, images:{}, days:{}, importlog:{},
   dismissed:{},   // dauerhaft im Cockpit gelöschte Anliegen-IDs (kommen beim Sync nicht zurück)
-  ui:{ ordersView:"kanban", ordersFilter:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null }
+  ui:{ ordersView:"kanban", ordersFilter:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null,
+       chatQuery:"", chatFrom:"", chatTo:"", chatResults:null }   // Chats nur im RAM (Datenschutz)
 };
 
 function loadState(){
@@ -423,6 +428,8 @@ function saveImportlog(){ persist(["importlog"]); } function saveDismissed(){ pe
 function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
 function hashId(s){ let h=5381; s=String(s); for(let i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))>>>0; } return h.toString(36); }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+// URLs aus importierten/Remote-Daten dürfen NUR http(s) sein (kein javascript: etc. in href/src).
+function safeUrl(u){ const s=String(u==null?"":u).trim(); return /^https?:\/\//i.test(s) ? esc(s) : ""; }
 function el(html){ const t=document.createElement("template"); t.innerHTML=String(html).trim(); return t.content.firstElementChild; }
 function todayStr(d){ try{ return (d||new Date()).toLocaleDateString("sv"); }catch(e){ const x=d||new Date(); return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); } }
 function fmtDate(ts){ if(!ts) return "—"; try{ return new Date(ts).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}); }catch(e){ return ""; } }
@@ -665,7 +672,22 @@ async function liveSyncAll(){
   if(!liveConfigured()) throw new Error("Kein Backend hinterlegt – bitte in den Einstellungen eintragen.");
   const out={orders:{added:0,updated:0},anliegen:{added:0,updated:0},images:{added:0,updated:0}};
   const od=await liveFetch("/admin/orders"); if(od&&Array.isArray(od.orders)) out.orders=mergeOrders(od.orders);
-  try{ const an=await liveFetch("/admin/anliegen"); if(an&&Array.isArray(an.anliegen)) out.anliegen=mergeAnliegen(an.anliegen); }catch(e){}
+  try{
+    const an=await liveFetch("/admin/anliegen");
+    if(an&&Array.isArray(an.anliegen)){
+      if(an.source==="db"){
+        // DB ist die Wahrheitsquelle (Status/Löschungen serverseitig) → Liste ersetzen,
+        // nur lokale Notizen behalten.
+        const next={};
+        an.anliegen.forEach(raw=>{ const s=sanitizeAnliegen(Object.assign({fromDb:true},raw)); if(!s) return;
+          const ex=state.anliegen[s.id]; if(ex&&ex.localNotes) s.localNotes=ex.localNotes; next[s.id]=s; });
+        out.anliegen={added:Math.max(0,Object.keys(next).length-Object.keys(state.anliegen).length),updated:0};
+        state.anliegen=next; saveAnliegen();
+      } else {
+        out.anliegen=mergeAnliegen(an.anliegen);
+      }
+    }
+  }catch(e){}
   try{ const im=await liveFetch("/admin/images"); if(im&&Array.isArray(im.images)) out.images=mergeImages(im.images); }catch(e){}
   const derived=deriveImagesFromOrders(); if(derived.length) mergeImages(derived);
   state.importlog.lastLiveAt=Date.now(); saveImportlog();
@@ -707,6 +729,7 @@ const NAV_ITEMS=[
   {name:"home",label:"Übersicht",ico:"◪",short:"Start"},
   {name:"bestellungen",label:"Bestellungen",ico:"▦",short:"Orders"},
   {name:"anliegen",label:"Anliegen",ico:"✉",short:"Anliegen"},
+  {name:"chats",label:"Chats",ico:"❋",short:"Chats"},
   {name:"wissensluecken",label:"KI-Wissenslücken",ico:"◐",short:"KI-Lücken"},
   {name:"dsgvo",label:"Augenbilder / DSGVO",ico:"◉",short:"DSGVO"},
   {name:"kalender",label:"Kalender",ico:"▤",short:"Plan"},
@@ -715,7 +738,7 @@ const NAV_ITEMS=[
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, anliegen:viewAnliegen, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, import:viewImport, einstellungen:viewSettings };
+const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, import:viewImport, einstellungen:viewSettings };
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
   const r=parseRoute(); const fn=views[r.name]||viewDashboard;
@@ -725,7 +748,7 @@ function render(){
 }
 function renderChrome(activeName){
   // topbar title + mode
-  const titleMap={ home:"Übersicht", bestellungen:"Bestellungen", bestellung:"Bestelldetail", anliegen:"Anliegen-Inbox", wissensluecken:"KI-Wissenslücken", dsgvo:"Augenbilder / DSGVO", kalender:"Kalender & Aufgaben", tag:"Tagesplan", import:"Import / Sync", einstellungen:"Einstellungen" };
+  const titleMap={ home:"Übersicht", bestellungen:"Bestellungen", bestellung:"Bestelldetail", anliegen:"Anliegen-Inbox", chats:"Chat-Verläufe", wissensluecken:"KI-Wissenslücken", dsgvo:"Augenbilder / DSGVO", kalender:"Kalender & Aufgaben", tag:"Tagesplan", import:"Import / Sync", einstellungen:"Einstellungen" };
   document.getElementById("tb-title").textContent=titleMap[activeName]||"Cockpit";
   const mode=document.getElementById("tb-mode"); const live=liveConfigured();
   mode.textContent=live?"Live":"Import"; mode.classList.toggle("live",live);
@@ -744,7 +767,7 @@ function renderChrome(activeName){
     return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span>'+dot+esc(it.short)+'</a>';
   }).join("");
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",anliegen:"✉",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",import:"⟳",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",import:"⟳",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
@@ -894,8 +917,8 @@ function viewOrderDetail(app,name){
     (m.customer_decision?kv("Kunden-Entscheid",esc(prettyToken(m.customer_decision))):"")+
     (m.repair_status?kv("Reparatur",esc(prettyToken(m.repair_status))+(m.repair_code?" · "+esc(m.repair_code):"")):"");
   const links=[];
-  if(o.adminUrl) links.push('<a class="btn btn-sm btn-ghost" href="'+esc(o.adminUrl)+'" target="_blank" rel="noopener">Shopify-Admin ↗</a>');
-  if(m.approval_url) links.push('<a class="btn btn-sm btn-ghost" href="'+esc(m.approval_url)+'" target="_blank" rel="noopener">Farbvorschau ↗</a>');
+  if(o.adminUrl) links.push('<a class="btn btn-sm btn-ghost" href="'+safeUrl(o.adminUrl)+'" target="_blank" rel="noopener">Shopify-Admin ↗</a>');
+  if(m.approval_url) links.push('<a class="btn btn-sm btn-ghost" href="'+safeUrl(m.approval_url)+'" target="_blank" rel="noopener">Farbvorschau ↗</a>');
   if(links.length) info.appendChild(el('<div class="row" style="margin-top:12px">'+links.join("")+'</div>'));
   wrap.appendChild(info);
 
@@ -905,7 +928,7 @@ function viewOrderDetail(app,name){
     Object.keys(p).forEach(k=>{ if(p[k]&&!isCloudinary(p[k])) pc.appendChild(el(kv(esc(k),esc(p[k])))); });
     const imgs=[]; Object.keys(p).forEach(k=>{ if(isCloudinary(p[k])) imgs.push({k,u:p[k]}); });
     if(m.preview_url) imgs.push({k:"Farbvorschau",u:m.preview_url});
-    if(imgs.length){ const ig=el('<div class="imgrid" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"></div>'); imgs.forEach(im=>{ ig.appendChild(el('<a href="'+esc(im.u)+'" target="_blank" rel="noopener" title="'+esc(im.k)+'"><img class="thumb" src="'+esc(im.u)+'" alt="'+esc(im.k)+'" loading="lazy"></a>')); }); pc.appendChild(ig); }
+    if(imgs.length){ const ig=el('<div class="imgrid" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"></div>'); imgs.forEach(im=>{ ig.appendChild(el('<a href="'+safeUrl(im.u)+'" target="_blank" rel="noopener" title="'+esc(im.k)+'"><img class="thumb" src="'+safeUrl(im.u)+'" alt="'+esc(im.k)+'" loading="lazy"></a>')); }); pc.appendChild(ig); }
     wrap.appendChild(pc);
   }
 
@@ -953,22 +976,25 @@ function viewAnliegen(app){
   if(!shown.length){ wrap.appendChild(emptyBlock("Keine Anliegen","Kundenanfragen erscheinen hier – per Snapshot, Live-Sync oder E-Mail-Einfügen.","",null,openEmailPaste,"E-Mail einfügen")); app.appendChild(wrap); return; }
 
   shown.forEach(a=>{
-    const kindK={"Widerruf":"warn","Feedback":"info","Adressänderung":"info","Chat-Nachricht":"muted","Sonstiges":"muted"}[a.kind]||"muted";
+    const kindK={"Widerruf":"warn","Feedback":"info","Adressänderung":"info","DSGVO":"danger","Reparatur":"info","Chat-Nachricht":"muted","Sonstiges":"muted"}[a.kind]||"muted";
     const done=a.status==="erledigt";
+    const statusK={"neu":"warn","in Arbeit":"info","beantwortet":"ok","erledigt":"muted"}[a.status]||"muted";
     const it=el('<div class="card" style="padding:14px"></div>');
     it.innerHTML='<div class="row" style="align-items:flex-start"><div style="flex:1;min-width:0">'+
-      '<div class="row" style="gap:6px"><span class="badge '+kindK+'">'+esc(a.kind)+'</span>'+(a.relatedOrder?'<span class="badge">'+esc(a.relatedOrder)+'</span>':"")+'<span class="badge '+(a.status==="offen"?"warn":a.status==="erledigt"?"ok":"info")+'">'+esc(a.status)+'</span></div>'+
+      '<div class="row" style="gap:6px"><span class="badge '+kindK+'">'+esc(a.kind)+'</span>'+(a.relatedOrder?'<span class="badge">'+esc(a.relatedOrder)+'</span>':"")+'<span class="badge '+statusK+'">'+esc(a.status)+'</span></div>'+
       '<div style="font-weight:700;margin-top:8px">'+esc(a.thema||"—")+'</div>'+
       '<div class="small" style="margin-top:4px;white-space:pre-wrap">'+esc(a.nachricht||"")+'</div>'+
+      (Array.isArray(a.replies)&&a.replies.length?'<div class="small" style="margin-top:8px;padding:8px;background:var(--ok-bg)"><b>Deine Antwort:</b> '+esc(a.replies[a.replies.length-1].text||"")+'</div>':"")+
       '<div class="tiny muted" style="margin-top:8px">'+esc(a.customerName||"")+(a.customerEmail?" · "+esc(a.customerEmail):"")+' · '+esc(fmtDateTime(a.date))+'</div>'+
       '</div></div>';
     const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
     if(a.customerEmail) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="mailto:'+esc(a.customerEmail)+'?subject='+encodeURIComponent("Deine Anfrage an M.IRIS")+'">Antworten</a>'));
-    if(a.widerrufAdminUrl) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+esc(a.widerrufAdminUrl)+'" target="_blank" rel="noopener">Widerruf öffnen ↗</a>'));
+    if(a.customerEmail||a.customerName){ const cb=el('<button class="btn btn-sm btn-ghost">Chats</button>'); cb.onclick=()=>{ state.ui.chatQuery=a.customerEmail||a.customerName; nav("#/chats"); }; acts.appendChild(cb); }
+    if(a.widerrufAdminUrl) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(a.widerrufAdminUrl)+'" target="_blank" rel="noopener">Widerruf öffnen ↗</a>'));
     if(a.relatedOrder && state.orders[a.relatedOrder]) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="#/bestellung/'+encodeURIComponent(a.relatedOrder)+'">Bestellung</a>'));
     const taskB=el('<button class="btn btn-sm btn-ghost">+ Aufgabe</button>'); taskB.onclick=()=>addTaskFor({linkedAnliegen:a.id,text:(a.thema||a.kind)+(a.relatedOrder?" ("+a.relatedOrder+")":"")}); acts.appendChild(taskB);
     const statusB=el('<button class="btn btn-sm '+(done?"btn-ghost":"btn-primary")+'">'+(done?"Wieder öffnen":"Erledigt ✓")+'</button>');
-    statusB.onclick=()=>{ a.status=done?"offen":"erledigt"; a.updatedAt=Date.now(); saveAnliegen(); render(); };
+    statusB.onclick=()=>setAnliegenStatus(a, done?"neu":"erledigt");
     const delB=el('<button class="btn btn-sm btn-danger">Löschen</button>');
     delB.onclick=()=>deleteAnliegen(a);
     acts.appendChild(el('<span class="spacer"></span>')); acts.appendChild(delB); acts.appendChild(statusB);
@@ -977,18 +1003,131 @@ function viewAnliegen(app){
   });
   app.appendChild(wrap);
 }
+async function setAnliegenStatus(a, status){
+  const prev=a.status;
+  a.status=status; a.updatedAt=Date.now(); saveAnliegen(); render();
+  if(liveConfigured() && a.fromDb){
+    try{ await liveFetch("/admin/anliegen/"+encodeURIComponent(a.id), {method:"PATCH", body:JSON.stringify({status})}); }
+    catch(e){ a.status=prev; saveAnliegen(); toast("Status konnte nicht gespeichert werden: "+e.message,4000); render(); }
+  }
+}
 function openEmailPaste(){
   const m=showModal('<h2>E-Mail / Anliegen einfügen</h2><p class="muted small">Füge den Text einer "Chat-Nachricht"-, "Feedback"- oder Widerruf-Mail ein. Das Cockpit erkennt Art, Kunde, Thema & Bestellnummer automatisch.</p><label class="field"><span>E-Mail-Text</span><textarea id="ep-in" style="min-height:160px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Erkennen & speichern</button></div>');
   m.querySelector('[data-x=no]').onclick=closeModal;
   m.querySelector('[data-x=yes]').onclick=()=>{ const t=m.querySelector("#ep-in").value.trim(); if(!t){ toast("Bitte Text einfügen"); return; } const parsed=parseEmail(t); const r=mergeAnliegen([parsed]); closeModal(); toast((r.added?"Anliegen gespeichert":"Aktualisiert")+" ("+parsed.kind+")"); render(); };
 }
 async function deleteAnliegen(a){
-  if(!await confirmDialog("Anliegen löschen?","Dieses Anliegen dauerhaft aus dem Cockpit entfernen? Es kommt auch nach einem erneuten Sync nicht zurück.","Löschen",true)) return;
-  state.dismissed[a.id]=Date.now();            // dauerhaft ausblenden (überlebt Live-Sync)
+  if(!await confirmDialog("Anliegen löschen?","Dieses Anliegen dauerhaft entfernen? Es kommt auch nach einem erneuten Sync nicht zurück.","Löschen",true)) return;
+  if(liveConfigured() && a.fromDb){
+    try{ await liveFetch("/admin/anliegen/"+encodeURIComponent(a.id), {method:"DELETE"}); }
+    catch(e){ toast("Löschen fehlgeschlagen: "+e.message,4000); return; }
+  }
+  state.dismissed[a.id]=Date.now();            // zusätzlich lokal ausblenden (Offline-Fallback)
   delete state.anliegen[a.id];
   saveDismissed(); saveAnliegen();
   toast("Anliegen gelöscht");
   render();
+}
+
+/* ======================================================================
+   Chats — gespeicherte Mary-Verläufe suchen, ansehen, löschen (DSGVO)
+   ====================================================================== */
+function viewChats(app){
+  const wrap=el('<div></div>');
+  wrap.innerHTML=pageHead("Chat-Verläufe","Suchen nach Name, E-Mail oder Bestellnummer – ansehen und löschen. Automatische Löschung nach 90 Tagen.");
+  if(!liveConfigured()){
+    wrap.appendChild(el('<div class="notice warn"><span class="ni">🔌</span><div>Chat-Verläufe brauchen das Live-Backend. Bitte in den <a href="#/einstellungen" style="text-decoration:underline">Einstellungen</a> Backend-URL + Admin-Token eintragen.</div></div>'));
+    app.appendChild(wrap); return;
+  }
+  const ctl=el('<div class="card" style="margin-bottom:12px"></div>');
+  ctl.innerHTML='<div class="row" style="gap:8px">'+
+    '<input type="text" id="cq" placeholder="Name, E-Mail oder Bestellnr. …" value="'+esc(state.ui.chatQuery||"")+'" style="flex:1;min-width:180px">'+
+    '<input type="date" id="cf" value="'+esc(state.ui.chatFrom||"")+'" title="von" style="max-width:150px">'+
+    '<input type="date" id="ct" value="'+esc(state.ui.chatTo||"")+'" title="bis" style="max-width:150px">'+
+    '<button class="btn btn-primary" id="cs">Suchen</button></div>';
+  wrap.appendChild(ctl);
+  const listBox=el('<div id="chat-list"></div>');
+  wrap.appendChild(listBox);
+  app.appendChild(wrap);
+
+  const doSearch=async()=>{
+    state.ui.chatQuery=ctl.querySelector("#cq").value.trim();
+    state.ui.chatFrom=ctl.querySelector("#cf").value;
+    state.ui.chatTo=ctl.querySelector("#ct").value;
+    listBox.innerHTML='<p class="muted small">Lade…</p>';
+    try{
+      const qs=new URLSearchParams();
+      if(state.ui.chatQuery) qs.set("q",state.ui.chatQuery);
+      if(state.ui.chatFrom) qs.set("from",state.ui.chatFrom+"T00:00:00Z");
+      if(state.ui.chatTo) qs.set("to",state.ui.chatTo+"T23:59:59Z");
+      qs.set("limit","100");
+      const res=await liveFetch("/admin/chats?"+qs.toString());
+      state.ui.chatResults=res.chats||[];
+      renderChatList(listBox);
+    }catch(e){ listBox.innerHTML=""; listBox.appendChild(el('<div class="notice warn"><span class="ni">⚠️</span><div>'+esc(e.message)+'</div></div>')); }
+  };
+  ctl.querySelector("#cs").onclick=doSearch;
+  ctl.querySelector("#cq").addEventListener("keydown",e=>{ if(e.key==="Enter") doSearch(); });
+  if(state.ui.chatResults) renderChatList(listBox); else doSearch();
+}
+function renderChatList(box){
+  const chats=state.ui.chatResults||[];
+  box.innerHTML="";
+  if(!chats.length){ box.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">❋</div><p>Keine Chat-Verläufe gefunden.</p></div></div>')); return; }
+  box.appendChild(el('<p class="tiny muted" style="margin-bottom:8px">'+chats.length+' Verlauf/Verläufe</p>'));
+  chats.forEach(c=>{
+    const it=el('<div class="card" style="padding:14px"></div>');
+    it.innerHTML='<div class="row" style="gap:6px">'+
+      (c.verified?'<span class="badge ok">verifiziert</span>':'<span class="badge">Gast</span>')+
+      (c.orderName?'<span class="badge">'+esc(c.orderName)+'</span>':"")+
+      '<span class="badge muted">'+(c.messageCount!=null?c.messageCount+" Nachr.":"")+'</span></div>'+
+      '<div style="font-weight:700;margin-top:8px">'+esc(c.customerName||"(ohne Name)")+'</div>'+
+      '<div class="small muted">'+esc(c.email||"—")+' · '+esc(fmtDateTime(c.updatedAt))+'</div>';
+    const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
+    const viewB=el('<button class="btn btn-sm btn-primary">Ansehen</button>'); viewB.onclick=()=>openChatViewer(c); acts.appendChild(viewB);
+    if(c.email){ const allB=el('<button class="btn btn-sm btn-ghost">Alle von Kunde löschen</button>'); allB.onclick=()=>deleteChatsOfCustomer(c.email); acts.appendChild(allB); }
+    acts.appendChild(el('<span class="spacer"></span>'));
+    const delB=el('<button class="btn btn-sm btn-danger">Löschen</button>'); delB.onclick=()=>deleteChatOne(c); acts.appendChild(delB);
+    it.appendChild(acts);
+    box.appendChild(it);
+  });
+}
+function chatMsgText(content){
+  if(typeof content==="string") return content;
+  if(Array.isArray(content)) return content.map(b=> typeof b==="string"?b:(b&&b.type==="text"?b.text:(b&&b.type==="tool_use"?"[Aktion: "+(b.name||"Tool")+"]":(b&&b.type==="tool_result"?"[Ergebnis entfernt]":"")))).filter(Boolean).join("\n");
+  return "";
+}
+async function openChatViewer(c){
+  const m=showModal('<h2>Chat mit '+esc(c.customerName||c.email||"Kunde")+'</h2><p class="tiny muted">'+esc(fmtDateTime(c.updatedAt))+(c.orderName?" · "+esc(c.orderName):"")+'</p><div id="cv-body" class="small" style="max-height:50dvh;overflow-y:auto;margin-top:10px"><p class="muted">Lade Verlauf…</p></div><div class="modal-btns"><button class="btn btn-danger" data-x="del">Löschen</button><button class="btn btn-ghost" data-x="no">Schließen</button></div>',{sticky:false});
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  m.querySelector('[data-x=del]').onclick=async()=>{ closeModal(); deleteChatOne(c); };
+  try{
+    const res=await liveFetch("/admin/chats/"+encodeURIComponent(c.id));
+    const msgs=(res.chat&&res.chat.messages)||[];
+    const body=m.querySelector("#cv-body"); body.innerHTML="";
+    if(!msgs.length){ body.innerHTML='<p class="muted">Kein Verlauf gespeichert.</p>'; return; }
+    msgs.forEach(msg=>{
+      const who=msg.role==="user"?"Kunde":"Mary";
+      const txt=chatMsgText(msg.content).trim(); if(!txt) return;
+      body.appendChild(el('<div style="margin-bottom:10px"><div class="tiny" style="letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)">'+who+'</div><div style="white-space:pre-wrap;padding:8px;background:'+(msg.role==="user"?"var(--surface2)":"var(--info-bg)")+'">'+esc(txt)+'</div></div>'));
+    });
+  }catch(e){ const body=m.querySelector("#cv-body"); if(body) body.innerHTML='<p class="muted">Fehler: '+esc(e.message)+'</p>'; }
+}
+async function deleteChatOne(c){
+  if(!await confirmDialog("Chat löschen?","Diesen Chat-Verlauf endgültig aus der Datenbank löschen?","Löschen",true)) return;
+  try{
+    await liveFetch("/admin/chats/"+encodeURIComponent(c.id),{method:"DELETE"});
+    state.ui.chatResults=(state.ui.chatResults||[]).filter(x=>x.id!==c.id);
+    toast("Chat gelöscht"); render();
+  }catch(e){ toast("Löschen fehlgeschlagen: "+e.message,4000); }
+}
+async function deleteChatsOfCustomer(email){
+  if(!await confirmDialog("Alle Chats löschen?","ALLE Chat-Verläufe von "+email+" endgültig löschen?","Alle löschen",true)) return;
+  try{
+    const res=await liveFetch("/admin/chats?email="+encodeURIComponent(email),{method:"DELETE"});
+    state.ui.chatResults=(state.ui.chatResults||[]).filter(x=>x.email!==email);
+    toast((res.deleted||0)+" Chat(s) gelöscht"); render();
+  }catch(e){ toast("Löschen fehlgeschlagen: "+e.message,4000); }
 }
 
 function viewGaps(app){
@@ -1042,7 +1181,7 @@ async function runGapsWith(input,btn){
 
 function viewGdpr(app){
   const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Augenbilder / DSGVO","Kundenfotos & Chats – markieren, löschen, dokumentieren.");
-  wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Augenbilder</b> löschst du hier '+(liveConfigured()?'<b>echt aus Cloudinary</b> (Button „🗑 Löschen")':'per Löschliste (im Live-Modus direkt aus Cloudinary)')+'. <b>Kundenchats</b> werden serverseitig nicht gespeichert (Mary ist flüchtig) – die einzelnen <b>Anliegen</b> aus dem Chat löschst du in der <a href="#/anliegen" style="text-decoration:underline">Anliegen-Inbox</a> (Button „Löschen").</div></div>'));
+  wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Augenbilder</b> löschst du hier '+(liveConfigured()?'<b>echt aus Cloudinary</b> (Button „🗑 Löschen")':'per Löschliste (im Live-Modus direkt aus Cloudinary)')+'. <b>Chat-Verläufe</b> suchst und löschst du unter <a href="#/chats" style="text-decoration:underline">Chats</a> (nach Name/E-Mail/Datum), <b>Anliegen</b> in der <a href="#/anliegen" style="text-decoration:underline">Anliegen-Inbox</a>. Automatische Löschung: Chats & Augenfotos nach 90 Tagen.</div></div>'));
 
   const imgs=Object.values(state.images);
   if(!imgs.length){ wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Keine Augenbilder erfasst. Bilder werden automatisch aus deinen Bestellungen (Line-Item "Auge N Bild") abgeleitet, sobald du Bestellungen importierst.</p></div></div>')); app.appendChild(wrap); return; }
@@ -1056,7 +1195,7 @@ function viewGdpr(app){
   const grid=el('<div class="imgrid"></div>');
   imgs.sort((a,b)=>b.ageDays-a.ageDays).forEach(im=>{
     const card=el('<div class="card" style="padding:10px"></div>');
-    card.innerHTML='<a href="'+esc(im.imageUrl)+'" target="_blank" rel="noopener"><img class="thumb" style="width:100%;height:120px" src="'+esc(im.imageUrl)+'" loading="lazy" alt="Augenbild"></a>'+
+    card.innerHTML='<a href="'+safeUrl(im.imageUrl)+'" target="_blank" rel="noopener"><img class="thumb" style="width:100%;height:120px" src="'+safeUrl(im.imageUrl)+'" loading="lazy" alt="Augenbild"></a>'+
       '<div class="tiny" style="margin-top:6px"><b>'+esc(im.orderName||"—")+'</b> · '+esc(im.label||"")+'</div>'+
       '<div class="tiny muted">'+im.ageDays+' Tage alt</div>'+
       (im.deletedAt?'<div class="badge ok" style="margin-top:6px">gelöscht '+esc(fmtDate(im.deletedAt))+'</div>':"");
