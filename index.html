@@ -988,7 +988,11 @@ function viewAnliegen(app){
       '<div class="tiny muted" style="margin-top:8px">'+esc(a.customerName||"")+(a.customerEmail?" · "+esc(a.customerEmail):"")+' · '+esc(fmtDateTime(a.date))+'</div>'+
       '</div></div>';
     const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
-    if(a.customerEmail) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="mailto:'+esc(a.customerEmail)+'?subject='+encodeURIComponent("Deine Anfrage an M.IRIS")+'">Antworten</a>'));
+    if(a.customerEmail && liveConfigured() && a.fromDb){
+      const rb=el('<button class="btn btn-sm btn-primary">✉ Antworten</button>'); rb.onclick=()=>openReplyModal(a); acts.appendChild(rb);
+    } else if(a.customerEmail){
+      acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="mailto:'+esc(a.customerEmail)+'?subject='+encodeURIComponent("Deine Anfrage an M.IRIS")+'">Antworten</a>'));
+    }
     if(a.customerEmail||a.customerName){ const cb=el('<button class="btn btn-sm btn-ghost">Chats</button>'); cb.onclick=()=>{ state.ui.chatQuery=a.customerEmail||a.customerName; nav("#/chats"); }; acts.appendChild(cb); }
     if(a.widerrufAdminUrl) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(a.widerrufAdminUrl)+'" target="_blank" rel="noopener">Widerruf öffnen ↗</a>'));
     if(a.relatedOrder && state.orders[a.relatedOrder]) acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="#/bestellung/'+encodeURIComponent(a.relatedOrder)+'">Bestellung</a>'));
@@ -1002,6 +1006,29 @@ function viewAnliegen(app){
     wrap.appendChild(it);
   });
   app.appendChild(wrap);
+}
+function openReplyModal(a){
+  const m=showModal(
+    '<h2>Antwort an '+esc(a.customerName||a.customerEmail)+'</h2>'+
+    '<p class="tiny muted">'+esc(a.thema||a.kind)+(a.relatedOrder?' · '+esc(a.relatedOrder):'')+' → '+esc(a.customerEmail)+'</p>'+
+    '<div class="small" style="margin:10px 0;padding:8px;background:var(--surface2);max-height:100px;overflow-y:auto;white-space:pre-wrap">'+esc(a.nachricht||"")+'</div>'+
+    '<label class="field"><span>Deine Antwort (geht sofort als M.IRIS-E-Mail raus)</span><textarea id="rp-in" style="min-height:140px" placeholder="Hallo… "></textarea></label>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden ✉</button></div>',
+    {sticky:true}
+  );
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  const sendBtn=m.querySelector('[data-x=send]');
+  sendBtn.onclick=async()=>{
+    const text=m.querySelector("#rp-in").value.trim();
+    if(text.length<2){ toast("Bitte eine Antwort schreiben"); return; }
+    sendBtn.disabled=true; sendBtn.innerHTML='<span class="spin"></span> Sende…';
+    try{
+      const res=await liveFetch("/admin/anliegen/"+encodeURIComponent(a.id)+"/reply",{method:"POST",body:JSON.stringify({reply_text:text})});
+      a.status="beantwortet"; a.replies=(a.replies||[]).concat([{text,at:new Date().toISOString()}]); saveAnliegen();
+      closeModal(); toast("Antwort gesendet an "+(res.to||a.customerEmail)+" ✓"); render();
+    }catch(e){ sendBtn.disabled=false; sendBtn.textContent="Senden ✉"; toast("Senden fehlgeschlagen: "+e.message,4500); }
+  };
+  m.querySelector("#rp-in").focus();
 }
 async function setAnliegenStatus(a, status){
   const prev=a.status;
