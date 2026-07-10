@@ -267,7 +267,7 @@ const SCHEMA_VERSION = 1;
 const K = {
   meta:"miris.meta", settings:"miris.settings", orders:"miris.orders",
   anliegen:"miris.anliegen", gaps:"miris.gaps", images:"miris.images",
-  days:"miris.days", importlog:"miris.importlog"
+  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed"
 };
 const DEFAULT_SETTINGS = {
   apiKey:"", model:"claude-opus-4-8", backendUrl:"", adminToken:"",
@@ -385,6 +385,7 @@ function sanitizeDays(obj){
 const state = {
   settings:Object.assign({},DEFAULT_SETTINGS),
   orders:{}, anliegen:{}, gaps:{}, images:{}, days:{}, importlog:{},
+  dismissed:{},   // dauerhaft im Cockpit gelöschte Anliegen-IDs (kommen beim Sync nicht zurück)
   ui:{ ordersView:"kanban", ordersFilter:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null }
 };
 
@@ -400,6 +401,7 @@ function loadState(){
   state.images = mapSanitize(Store.get(K.images,{}), sanitizeImage, "id");
   state.days = sanitizeDays(Store.get(K.days,{}));
   state.importlog = Store.get(K.importlog,{}) || {};
+  const dm = Store.get(K.dismissed,{}); state.dismissed = (dm && typeof dm==="object" && !Array.isArray(dm)) ? dm : {};
   state.ui.ordersView = state.settings.kanbanMode ? "kanban" : "liste";
 }
 function mapSanitize(raw, fn, keyField){
@@ -415,7 +417,7 @@ try{ window.addEventListener("pagehide",flushSaves); document.addEventListener("
 function saveOrders(){ persist(["orders"]); } function saveAnliegen(){ persist(["anliegen"]); }
 function saveGaps(){ persist(["gaps"]); } function saveImages(){ persist(["images"]); }
 function saveDays(){ persist(["days"]); } function saveSettings(){ persist(["settings"]); }
-function saveImportlog(){ persist(["importlog"]); }
+function saveImportlog(){ persist(["importlog"]); } function saveDismissed(){ persist(["dismissed"]); }
 
 /* ---------- Helfer ---------- */
 function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
@@ -540,6 +542,7 @@ function mergeAnliegen(incoming){
   let added=0,updated=0;
   incoming.forEach(raw=>{
     const inc=sanitizeAnliegen(raw); if(!inc) return;
+    if(state.dismissed[inc.id]) return;   // im Cockpit gelöscht → nicht zurückholen
     const ex=state.anliegen[inc.id];
     if(!ex){ state.anliegen[inc.id]=inc; added++; }
     else { // Remote-Felder auffrischen, Status/Notizen behalten
@@ -966,7 +969,9 @@ function viewAnliegen(app){
     const taskB=el('<button class="btn btn-sm btn-ghost">+ Aufgabe</button>'); taskB.onclick=()=>addTaskFor({linkedAnliegen:a.id,text:(a.thema||a.kind)+(a.relatedOrder?" ("+a.relatedOrder+")":"")}); acts.appendChild(taskB);
     const statusB=el('<button class="btn btn-sm '+(done?"btn-ghost":"btn-primary")+'">'+(done?"Wieder öffnen":"Erledigt ✓")+'</button>');
     statusB.onclick=()=>{ a.status=done?"offen":"erledigt"; a.updatedAt=Date.now(); saveAnliegen(); render(); };
-    acts.appendChild(el('<span class="spacer"></span>')); acts.appendChild(statusB);
+    const delB=el('<button class="btn btn-sm btn-danger">Löschen</button>');
+    delB.onclick=()=>deleteAnliegen(a);
+    acts.appendChild(el('<span class="spacer"></span>')); acts.appendChild(delB); acts.appendChild(statusB);
     it.appendChild(acts);
     wrap.appendChild(it);
   });
@@ -976,6 +981,14 @@ function openEmailPaste(){
   const m=showModal('<h2>E-Mail / Anliegen einfügen</h2><p class="muted small">Füge den Text einer "Chat-Nachricht"-, "Feedback"- oder Widerruf-Mail ein. Das Cockpit erkennt Art, Kunde, Thema & Bestellnummer automatisch.</p><label class="field"><span>E-Mail-Text</span><textarea id="ep-in" style="min-height:160px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Erkennen & speichern</button></div>');
   m.querySelector('[data-x=no]').onclick=closeModal;
   m.querySelector('[data-x=yes]').onclick=()=>{ const t=m.querySelector("#ep-in").value.trim(); if(!t){ toast("Bitte Text einfügen"); return; } const parsed=parseEmail(t); const r=mergeAnliegen([parsed]); closeModal(); toast((r.added?"Anliegen gespeichert":"Aktualisiert")+" ("+parsed.kind+")"); render(); };
+}
+async function deleteAnliegen(a){
+  if(!await confirmDialog("Anliegen löschen?","Dieses Anliegen dauerhaft aus dem Cockpit entfernen? Es kommt auch nach einem erneuten Sync nicht zurück.","Löschen",true)) return;
+  state.dismissed[a.id]=Date.now();            // dauerhaft ausblenden (überlebt Live-Sync)
+  delete state.anliegen[a.id];
+  saveDismissed(); saveAnliegen();
+  toast("Anliegen gelöscht");
+  render();
 }
 
 function viewGaps(app){
@@ -1029,7 +1042,7 @@ async function runGapsWith(input,btn){
 
 function viewGdpr(app){
   const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Augenbilder / DSGVO","Kundenfotos & Chats – markieren, löschen, dokumentieren.");
-  wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Kundenchats:</b> Der Mary-Chat ist serverseitig flüchtig (30-Min-TTL, keine Speicherung) – es gibt aktuell nichts zu löschen. Sobald das Backend Transkripte speichert (Phase 3), erscheinen sie hier zum Löschen.</div></div>'));
+  wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Augenbilder</b> löschst du hier '+(liveConfigured()?'<b>echt aus Cloudinary</b> (Button „🗑 Löschen")':'per Löschliste (im Live-Modus direkt aus Cloudinary)')+'. <b>Kundenchats</b> werden serverseitig nicht gespeichert (Mary ist flüchtig) – die einzelnen <b>Anliegen</b> aus dem Chat löschst du in der <a href="#/anliegen" style="text-decoration:underline">Anliegen-Inbox</a> (Button „Löschen").</div></div>'));
 
   const imgs=Object.values(state.images);
   if(!imgs.length){ wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Keine Augenbilder erfasst. Bilder werden automatisch aus deinen Bestellungen (Line-Item "Auge N Bild") abgeleitet, sobald du Bestellungen importierst.</p></div></div>')); app.appendChild(wrap); return; }
@@ -1048,9 +1061,16 @@ function viewGdpr(app){
       '<div class="tiny muted">'+im.ageDays+' Tage alt</div>'+
       (im.deletedAt?'<div class="badge ok" style="margin-top:6px">gelöscht '+esc(fmtDate(im.deletedAt))+'</div>':"");
     if(!im.deletedAt){ const row=el('<div class="row" style="margin-top:8px;gap:6px"></div>');
-      const flag=el('<button class="btn btn-sm '+(im.flaggedForDeletion?"btn-primary":"btn-ghost")+'">'+(im.flaggedForDeletion?"✓ markiert":"markieren")+'</button>');
-      flag.onclick=()=>{ im.flaggedForDeletion=!im.flaggedForDeletion; saveImages(); render(); }; row.appendChild(flag);
-      const done=el('<button class="btn btn-sm btn-ghost">gelöscht</button>'); done.onclick=()=>{ im.deletedAt=Date.now(); im.flaggedForDeletion=false; saveImages(); render(); }; row.appendChild(done);
+      if(liveConfigured()){
+        const del=el('<button class="btn btn-sm btn-danger">🗑 Löschen</button>');
+        del.onclick=()=>liveDeleteImages([im]); row.appendChild(del);
+        const done=el('<button class="btn btn-sm btn-ghost" title="Nur im Cockpit als erledigt markieren">nur lokal</button>');
+        done.onclick=()=>{ im.deletedAt=Date.now(); im.flaggedForDeletion=false; saveImages(); render(); }; row.appendChild(done);
+      } else {
+        const flag=el('<button class="btn btn-sm '+(im.flaggedForDeletion?"btn-primary":"btn-ghost")+'">'+(im.flaggedForDeletion?"✓ markiert":"markieren")+'</button>');
+        flag.onclick=()=>{ im.flaggedForDeletion=!im.flaggedForDeletion; saveImages(); render(); }; row.appendChild(flag);
+        const done=el('<button class="btn btn-sm btn-ghost">gelöscht</button>'); done.onclick=()=>{ im.deletedAt=Date.now(); im.flaggedForDeletion=false; saveImages(); render(); }; row.appendChild(done);
+      }
       card.appendChild(row);
     }
     grid.appendChild(card);
