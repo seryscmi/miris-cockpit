@@ -1305,7 +1305,7 @@ function viewChats(app){
       const res=await liveFetch("/admin/chats?"+qs.toString());
       state.ui.chatResults=res.chats||[];
       renderChatList(listBox);
-    }catch(e){ listBox.innerHTML=""; listBox.appendChild(el('<div class="notice warn"><span class="ni">⚠️</span><div>'+esc(e.message)+'</div></div>')); }
+    }catch(e){ listBox.innerHTML=""; listBox.appendChild(el('<div class="card"><p class="small" style="color:var(--danger)">'+esc(e.message)+'</p></div>')); }
   };
   ctl.querySelector("#cs").onclick=doSearch;
   ctl.querySelector("#cq").addEventListener("keydown",e=>{ if(e.key==="Enter") doSearch(); });
