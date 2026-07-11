@@ -142,6 +142,29 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .kpi .k-val{font-family:var(--serif);font-size:26px;font-weight:600;margin-top:6px;letter-spacing:.02em}
 .kpi .k-sub{font-size:11px;color:var(--ink2);margin-top:2px}
 
+/* Heute: Stat-Chips + Aktions-Warteschlange */
+.stat-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.stat-chip{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;min-width:104px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);text-decoration:none;transition:border-color .18s cubic-bezier(.22,1,.36,1)}
+.stat-chip:hover{border-color:var(--ink)}
+.stat-chip .sc-v{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.stat-chip .sc-l{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+.q-card{padding:0;margin-top:12px}
+.q-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.q-head h2{font-size:13px;letter-spacing:.1em;margin:0;flex:1}
+.q-count{font-family:var(--sans);font-size:12px;font-weight:800;background:var(--ink);color:var(--paper);padding:2px 9px}
+.q-row{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.q-row:last-child{border-bottom:none}
+.q-row .q-main{flex:1;min-width:0;text-decoration:none;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (prefers-reduced-motion: reduce){ .stat-chip{transition:none} .spin{animation:none} }
+
+/* Filter-Chips (Bestellungen) */
+.chip-row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;margin-bottom:6px}
+.f-chip{flex:0 0 auto;background:var(--surface);border:1px solid var(--line2);padding:7px 12px;font-size:12px;cursor:pointer;white-space:nowrap;color:var(--ink2);transition:all .15s cubic-bezier(.22,1,.36,1)}
+.f-chip b{color:inherit;font-weight:800;margin-left:2px}
+.f-chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.f-chip.hot:not(.on){border-color:var(--danger);color:var(--danger)}
+@media (prefers-reduced-motion: reduce){ .f-chip{transition:none} }
+
 /* Category chips row */
 .catgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @media(min-width:640px){.catgrid{grid-template-columns:repeat(4,1fr)}}
@@ -273,7 +296,7 @@ const SCHEMA_VERSION = 1;
 const K = {
   meta:"miris.meta", settings:"miris.settings", orders:"miris.orders",
   anliegen:"miris.anliegen", gaps:"miris.gaps", images:"miris.images",
-  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed"
+  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails"
 };
 const DEFAULT_SETTINGS = {
   apiKey:"", model:"claude-opus-4-8", backendUrl:"", adminToken:"",
@@ -332,6 +355,8 @@ function sanitizeOrder(o){
     lineItems, miris,
     adminUrl: str(o.adminUrl,400),
     isWiderruf: !!o.isWiderruf,
+    cancelledAt: o.cancelledAt || null,
+    shippingAddress: (o.shippingAddress && typeof o.shippingAddress==="object") ? o.shippingAddress : null,
     local, _sourceHash: str(o._sourceHash,64), updatedAt: tsMs(o.updatedAt)||Date.now()
   };
 }
@@ -396,8 +421,9 @@ const state = {
   settings:Object.assign({},DEFAULT_SETTINGS),
   orders:{}, anliegen:{}, gaps:{}, images:{}, days:{}, importlog:{},
   dismissed:{},   // dauerhaft im Cockpit gelöschte Anliegen-IDs (kommen beim Sync nicht zurück)
-  ui:{ ordersView:"kanban", ordersFilter:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null,
-       chatQuery:"", chatFrom:"", chatTo:"", chatResults:null }   // Chats nur im RAM (Datenschutz)
+  sentMails:{},   // Sendeprotokoll je Kunde (nur lokal; Klaviyo ist die autoritative Historie)
+  ui:{ ordersView:"kanban", ordersFilter:"", ordersQuery:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null,
+       kundenQuery:"", chatQuery:"", chatFrom:"", chatTo:"", chatResults:null }   // Chats nur im RAM (Datenschutz)
 };
 
 function loadState(){
@@ -413,6 +439,7 @@ function loadState(){
   state.days = sanitizeDays(Store.get(K.days,{}));
   state.importlog = Store.get(K.importlog,{}) || {};
   const dm = Store.get(K.dismissed,{}); state.dismissed = (dm && typeof dm==="object" && !Array.isArray(dm)) ? dm : {};
+  const sm = Store.get(K.sentMails,{}); state.sentMails = (sm && typeof sm==="object" && !Array.isArray(sm)) ? sm : {};
   // Speicher-Hygiene: Altlasten automatisch ausmisten
   try{
     const now=Date.now(); let prunedI=0, prunedD=0;
@@ -436,6 +463,7 @@ function saveOrders(){ persist(["orders"]); } function saveAnliegen(){ persist([
 function saveGaps(){ persist(["gaps"]); } function saveImages(){ persist(["images"]); }
 function saveDays(){ persist(["days"]); } function saveSettings(){ persist(["settings"]); }
 function saveImportlog(){ persist(["importlog"]); } function saveDismissed(){ persist(["dismissed"]); }
+function saveSentMails(){ persist(["sentMails"]); }
 
 /* ---------- Helfer ---------- */
 function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
@@ -537,7 +565,7 @@ function todaysTasks(){ return (state.days[todayStr()]||[]); }
    Daten-Provider: Import (JSON/CSV/E-Mail) + Live (Admin-Dienst)
    ====================================================================== */
 function orderSourceHash(o){ // hash über Remote-Felder (ohne local{})
-  return hashId(JSON.stringify({n:o.name,c:o.createdAt,t:o.totalPrice,f:o.financialStatus,fu:o.fulfillmentStatus,m:o.miris,li:o.lineItems,w:o.isWiderruf}));
+  return hashId(JSON.stringify({n:o.name,c:o.createdAt,t:o.totalPrice,f:o.financialStatus,fu:o.fulfillmentStatus,m:o.miris,li:o.lineItems,w:o.isWiderruf,sa:o.shippingAddress,ca:o.cancelledAt,e:o.customerEmail}));
 }
 function mergeOrders(incoming){
   let added=0,updated=0;
@@ -740,19 +768,20 @@ async function runGapExtraction(inputText,signal){
    Router
    ====================================================================== */
 const NAV_ITEMS=[
-  {name:"home",label:"Übersicht",ico:"◪",short:"Start"},
+  {name:"home",label:"Heute",ico:"◪",short:"Heute"},
   {name:"bestellungen",label:"Bestellungen",ico:"▦",short:"Orders"},
-  {name:"anliegen",label:"Anliegen",ico:"✉",short:"Anliegen"},
+  {name:"kunden",label:"Kunden",ico:"◎",short:"Kunden"},
+  {name:"anliegen",label:"Inbox",ico:"✉",short:"Inbox"},
   {name:"chats",label:"Chats",ico:"❋",short:"Chats"},
   {name:"wissensluecken",label:"KI-Wissenslücken",ico:"◐",short:"KI-Lücken"},
-  {name:"dsgvo",label:"Augenbilder / DSGVO",ico:"◉",short:"DSGVO"},
   {name:"kalender",label:"Kalender",ico:"▤",short:"Plan"},
-  {name:"import",label:"Import / Sync",ico:"⟳",short:"Sync"},
+  {name:"dsgvo",label:"DSGVO",ico:"◉",short:"DSGVO"},
   {name:"einstellungen",label:"Einstellungen",ico:"⚙",short:"Setup"}
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, import:viewImport, einstellungen:viewSettings };
+const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, import:viewImportRedirect, einstellungen:viewSettings };
+function viewImportRedirect(){ nav("#/einstellungen"); } // Alias: alte Lesezeichen/Links
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
   const r=parseRoute(); const fn=views[r.name]||viewDashboard;
@@ -767,7 +796,7 @@ function mahnungFaelligCount(now){
 }
 function renderChrome(activeName){
   // topbar title + mode + Sync + Suche
-  const titleMap={ home:"Übersicht", bestellungen:"Bestellungen", bestellung:"Bestelldetail", anliegen:"Anliegen-Inbox", chats:"Chat-Verläufe", wissensluecken:"KI-Wissenslücken", dsgvo:"Augenbilder / DSGVO", kalender:"Kalender & Aufgaben", tag:"Tagesplan", import:"Import / Sync", einstellungen:"Einstellungen" };
+  const titleMap={ home:"Heute", bestellungen:"Bestellungen", bestellung:"Bestellung", kunden:"Kunden", kunde:"Kundenakte", anliegen:"Inbox", chats:"Chats", wissensluecken:"KI-Wissenslücken", dsgvo:"DSGVO", kalender:"Kalender", tag:"Tagesplan", einstellungen:"Einstellungen" };
   document.getElementById("tb-title").textContent=titleMap[activeName]||"Cockpit";
   const mode=document.getElementById("tb-mode"); const live=liveConfigured();
   mode.textContent=state.ui.syncing?"Sync…":(live?"Live":"Import"); mode.classList.toggle("live",live);
@@ -777,16 +806,16 @@ function renderChrome(activeName){
   const side=document.getElementById("sidenav"); const bot=document.getElementById("bottomnav");
   const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount() };
   side.innerHTML=NAV_ITEMS.map(it=>{
-    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="tag"&&it.name==="kalender");
+    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const badge=c?'<span class="n-badge">'+c+'</span>':"";
     return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span><span>'+esc(it.label)+'</span>'+badge+'</a>';
   }).join("");
   // Mobil: 4 Primärtabs + „Mehr"-Sheet (Rest inkl. Einstellungen ist damit überall erreichbar)
-  const primary=NAV_ITEMS.filter(it=>["home","bestellungen","anliegen","kalender"].includes(it.name));
-  const moreNames=["chats","wissensluecken","dsgvo","import","einstellungen"];
+  const primary=NAV_ITEMS.filter(it=>["home","bestellungen","kunden","anliegen"].includes(it.name));
+  const moreNames=["chats","wissensluecken","kalender","dsgvo","einstellungen"];
   const moreCount=(counts.dsgvo||0)+(counts.wissensluecken||0);
   bot.innerHTML=primary.map(it=>{
-    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="tag"&&it.name==="kalender");
+    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const dot=c?'<span class="n-dot">'+c+'</span>':"";
     return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span>'+dot+esc(it.short)+'</a>';
   }).join("")+
@@ -805,90 +834,142 @@ function openMoreSheet(names,counts){
     list.appendChild(row);
   });
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",import:"⟳",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
    ====================================================================== */
 function pageHead(title,sub){ return '<div class="page-head"><h1>'+esc(title)+'</h1>'+(sub?'<p>'+esc(sub)+'</p>':"")+'</div>'; }
 
+/* ======================================================================
+   Heute — Aktions-Warteschlange (nur was zu tun ist, direkt erledigbar)
+   ====================================================================== */
 function viewDashboard(app){
   const now=Date.now(); const rev=revenue(now); const buckets=ordersByCategory(now);
   const totalOrders=Object.keys(state.orders).length;
   const wrap=el('<div></div>');
-  wrap.innerHTML=pageHead("Übersicht","Dein Arbeitsstand auf einen Blick.");
-
-  // freshness
-  const fresh=state.importlog.lastLiveAt||state.importlog.lastSnapshotAt;
-  const freshTxt = fresh ? ("Datenstand: "+fmtDateTime(fresh)+(liveConfigured()?" · Live":" · Import")) : "Noch keine Daten importiert.";
-  wrap.appendChild(el('<div class="notice"><span class="ni">🕓</span><div>'+esc(freshTxt)+' '+(liveConfigured()?'<a href="#" onclick="doLiveSync();return false" style="text-decoration:underline">aktualisieren</a>':'<a href="#/import" style="text-decoration:underline">importieren</a>')+'</div></div>'));
 
   if(totalOrders===0){
-    wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Noch keine Bestellungen im Cockpit. Lade einen Daten-Snapshot, importiere eine CSV – oder starte mit Demo-Daten, um alles auszuprobieren.</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="#/import">Daten importieren</a><button class="btn btn-ghost" id="seed">Demo-Daten laden</button></div></div></div>'));
+    wrap.innerHTML=pageHead("Heute","");
+    wrap.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◉</div><p>Noch keine Daten. Verbinde das Backend oder importiere einen Snapshot.</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="#/einstellungen">Einrichten</a><button class="btn btn-ghost" id="seed">Demo laden</button></div></div></div>'));
     app.appendChild(wrap); wrap.querySelector("#seed").onclick=()=>{ seedDemo(); toast("Demo-Daten geladen"); render(); };
     return;
   }
 
-  // KPIs
-  const kp=el('<div class="kpis" style="margin-top:14px"></div>');
+  // Kopf: Datum + Datenstand (eine Zeile, kein Karton)
+  const fresh=state.importlog.lastLiveAt||state.importlog.lastSnapshotAt;
+  const offen=totalOrders-((buckets["Versendet"]||[]).length+(buckets["Erledigt"]||[]).length);
+  wrap.appendChild(el('<div class="page-head"><h1>Heute</h1><p>'+esc(new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"}))+(fresh?' · Stand '+esc(fmtDateTime(fresh)):"")+'</p></div>'));
+
+  // KPI-Zeile: kompakt, horizontal scrollbar auf Mobil
+  const kp=el('<div class="stat-row"></div>');
   kp.innerHTML=
-    kpi("Umsatz heute",fmtMoney(rev.heute),rev.paidCount+" bezahlte Bestellungen")+
-    kpi("Umsatz Woche",fmtMoney(rev.woche),"letzte 7 Tage")+
-    kpi("Umsatz Monat",fmtMoney(rev.monat),"seit Monatsbeginn")+
-    kpi("Umsatz gesamt",fmtMoney(rev.gesamt),totalOrders+" Bestellungen gesamt");
+    statChip(fmtMoney(rev.monat),"Umsatz Monat","#/bestellungen")+
+    statChip(offen,"Offen","#/bestellungen")+
+    statChip(openAnliegenCount(),"Inbox","#/anliegen")+
+    statChip((buckets["Farbvorschau offen"]||[]).length,"Vorschau offen","#/bestellungen");
   wrap.appendChild(kp);
 
-  // Kategorien
-  wrap.appendChild(el('<h2 style="font-size:15px;margin:22px 0 10px">Bestellungen nach Status</h2>'));
-  const cg=el('<div class="catgrid"></div>');
-  cg.innerHTML=CATS.map(c=>{ const n=(buckets[c]||[]).length; const hot=(c==="Mahnung fällig"&&n>0); const meta=CAT_META[c]||{};
-    return '<button class="catchip'+(hot?" hot":"")+'" data-c="'+esc(c)+'"><span class="cc-n">'+n+'</span><span class="cc-l">'+esc(meta.ico?meta.ico+" ":"")+esc(c)+'</span></button>';
-  }).join("");
-  wrap.appendChild(cg);
+  // Aktions-Warteschlange — Karten nur wenn etwas ansteht
+  const q=el('<div style="margin-top:18px"></div>');
+  let queued=0;
 
-  // Aufgaben heute + offene Anliegen + DSGVO
-  const grid=el('<div style="display:grid;gap:12px;margin-top:22px;grid-template-columns:1fr"></div>');
-  // tasks
+  const mahn=buckets["Mahnung fällig"]||[];
+  if(mahn.length){ queued++;
+    const c=queueCard("⚠️","Mahnung fällig",mahn.length);
+    mahn.slice(0,5).forEach(o=>{
+      const row=el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+' · '+esc(fmtMoney(o.totalPrice,o.currency))+'</span></a></div>');
+      if(liveConfigured()){
+        const b=el('<button class="btn btn-sm btn-danger">Mahnung</button>');
+        b.onclick=async()=>{ if(!await confirmDialog("Mahnung senden?","Letzte Mahnung an "+(o.customerName||o.name)+": 14-Tage-Frist, danach Inkasso.","Senden",true)) return;
+          b.disabled=true; b.innerHTML='<span class="spin"></span>';
+          try{ await liveFetch("/admin/orders/"+encodeURIComponent(o.name)+"/mahnung",{method:"POST"}); o.local.mahnungSentAt=Date.now(); saveOrders(); toast("Mahnung gesendet ✓"); render(); }
+          catch(e){ b.disabled=false; b.textContent="Mahnung"; toast(e.message,5000); } };
+        row.appendChild(b);
+      }
+      c.appendChild(row);
+    });
+    q.appendChild(c);
+  }
+
+  const vor=buckets["Farbvorschau offen"]||[];
+  if(vor.length){ queued++;
+    const c=queueCard("🎨","Farbvorschau senden",vor.length);
+    vor.slice(0,5).forEach(o=>c.appendChild(el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+'</span></a><span class="badge warn">offen</span></div>')));
+    q.appendChild(c);
+  }
+
+  const frei=buckets["Freigegeben – muss versendet werden"]||[];
+  if(frei.length){ queued++;
+    const c=queueCard("📦","Versandbereit",frei.length);
+    frei.slice(0,5).forEach(o=>c.appendChild(el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+'</span></a><span class="badge ok">freigegeben</span></div>')));
+    q.appendChild(c);
+  }
+
+  const neueAnliegen=Object.values(state.anliegen).filter(a=>a.status==="neu").sort((a,b)=>b.date-a.date);
+  if(neueAnliegen.length){ queued++;
+    const c=queueCard("✉","Neue Anliegen",neueAnliegen.length);
+    neueAnliegen.slice(0,5).forEach(a=>c.appendChild(el('<div class="q-row"><a href="#/anliegen" class="q-main"><b>'+esc(a.thema||a.kind)+'</b> <span class="muted">'+esc(a.customerName||"")+'</span></a><span class="badge">'+esc(a.kind)+'</span></div>')));
+    q.appendChild(c);
+  }
+
   const tasks=todaysTasks();
-  const tcard=el('<div class="card"></div>');
-  tcard.innerHTML='<div class="row"><h2 style="font-size:15px">Heute zu tun</h2><span class="spacer"></span><a class="btn btn-sm btn-ghost" href="#/kalender">Kalender</a></div>';
-  if(tasks.length){ tasks.forEach(t=>{ const row=el('<div class="toggle-row"><span class="t-l">'+(t.done?'<s class="muted">':"")+esc(t.text)+(t.done?"</s>":"")+'</span></div>'); const sw=el('<label class="switch"><input type="checkbox" '+(t.done?"checked":"")+'><span class="sl"></span></label>'); sw.querySelector("input").onchange=(e)=>{ t.done=e.target.checked; saveDays(); render(); }; row.appendChild(sw); tcard.appendChild(row); }); }
-  else tcard.appendChild(el('<p class="muted small" style="margin-top:8px">Keine Aufgaben für heute. <a href="#/kalender" style="text-decoration:underline">Aufgabe planen</a></p>'));
-  grid.appendChild(tcard);
-  // anliegen + dsgvo summary
-  const sc=el('<div class="card"></div>');
-  sc.innerHTML='<div class="row" style="align-items:stretch;gap:12px">'+
-    '<a href="#/anliegen" style="flex:1;text-decoration:none"><div class="kpi" style="height:100%"><div class="k-label">Offene Anliegen</div><div class="k-val">'+openAnliegenCount()+'</div><div class="k-sub">Kundenanfragen abzuarbeiten</div></div></a>'+
-    '<a href="#/wissensluecken" style="flex:1;text-decoration:none"><div class="kpi" style="height:100%"><div class="k-label">KI-Wissenslücken</div><div class="k-val">'+openGapsCount()+'</div><div class="k-sub">für die KB offen</div></div></a>'+
-    '<a href="#/dsgvo" style="flex:1;text-decoration:none"><div class="kpi" style="height:100%"><div class="k-label">Bilder zu löschen</div><div class="k-val">'+openImagesCount()+'</div><div class="k-sub">DSGVO-Löschliste</div></div></a>'+
-    '</div>';
-  grid.appendChild(sc);
-  wrap.appendChild(grid);
+  if(tasks.length){ queued++;
+    const c=queueCard("▤","Aufgaben",tasks.filter(t=>!t.done).length+"/"+tasks.length);
+    tasks.forEach(t=>{
+      const row=el('<div class="q-row"><span class="q-main">'+(t.done?'<s class="muted">':"")+esc(t.text)+(t.done?"</s>":"")+'</span></div>');
+      const sw=el('<label class="switch"><input type="checkbox" '+(t.done?"checked":"")+'><span class="sl"></span></label>');
+      sw.querySelector("input").onchange=(e)=>{ t.done=e.target.checked; saveDays(); render(); };
+      row.appendChild(sw); c.appendChild(row);
+    });
+    q.appendChild(c);
+  }
 
+  if(!queued) q.appendChild(el('<div class="card"><div class="empty" style="padding:34px 20px"><div class="e-ico">✓</div><p style="margin:0">Alles erledigt.</p></div></div>'));
+  wrap.appendChild(q);
   app.appendChild(wrap);
-  cg.querySelectorAll(".catchip").forEach(b=>b.onclick=()=>{ state.ui.ordersFilter=b.getAttribute("data-c"); nav("#/bestellungen"); });
+}
+function statChip(val,label,href){
+  return '<a class="stat-chip" href="'+href+'"><span class="sc-v">'+esc(String(val))+'</span><span class="sc-l">'+esc(label)+'</span></a>';
+}
+function queueCard(ico,title,count){
+  const c=el('<div class="card q-card"></div>');
+  c.innerHTML='<div class="q-head"><span>'+ico+'</span><h2>'+esc(title)+'</h2><span class="q-count">'+esc(String(count))+'</span></div>';
+  return c;
 }
 function kpi(label,val,sub){ return '<div class="kpi"><div class="k-label">'+esc(label)+'</div><div class="k-val">'+esc(val)+'</div><div class="k-sub">'+esc(sub||"")+'</div></div>'; }
 
 function viewOrders(app){
   const now=Date.now(); const buckets=ordersByCategory(now);
   const wrap=el('<div></div>');
-  wrap.innerHTML=pageHead("Bestellungen","Kategorisiert nach Arbeitsschritt. Tippe eine Karte für Details.");
-  // controls
-  const ctl=el('<div class="row" style="margin-bottom:14px"></div>');
+  wrap.innerHTML=pageHead("Bestellungen","");
+  // Suche + Ansicht
+  const ctl=el('<div class="row" style="margin-bottom:10px;gap:8px"></div>');
+  const search=el('<input type="text" placeholder="Suchen…" value="'+esc(state.ui.ordersQuery||"")+'" style="flex:1;min-width:140px;max-width:320px">');
+  ctl.appendChild(search);
+  ctl.appendChild(el('<span class="spacer"></span>'));
   const seg=el('<div class="seg"><button data-v="kanban" class="'+(state.ui.ordersView==="kanban"?"on":"")+'">Board</button><button data-v="liste" class="'+(state.ui.ordersView==="liste"?"on":"")+'">Liste</button></div>');
   ctl.appendChild(seg);
-  const filterSel=el('<select style="max-width:260px"><option value="">Alle Kategorien</option>'+CATS.map(c=>'<option value="'+esc(c)+'"'+(state.ui.ordersFilter===c?" selected":"")+'>'+esc(c)+' ('+(buckets[c]||[]).length+')</option>').join("")+'</select>');
-  ctl.appendChild(filterSel);
-  ctl.appendChild(el('<span class="spacer"></span>'));
   wrap.appendChild(ctl);
+  // Kategorie-Chips (Filter, ehem. Dashboard-Kacheln)
+  const chips=el('<div class="chip-row"></div>');
+  chips.innerHTML='<button class="f-chip'+(!state.ui.ordersFilter?" on":"")+'" data-c="">Alle</button>'+
+    CATS.map(c=>{ const n=(buckets[c]||[]).length; if(!n&&state.ui.ordersFilter!==c) return "";
+      return '<button class="f-chip'+(state.ui.ordersFilter===c?" on":"")+(c==="Mahnung fällig"&&n?" hot":"")+'" data-c="'+esc(c)+'">'+esc(c)+' <b>'+n+'</b></button>'; }).join("");
+  wrap.appendChild(chips);
+  chips.querySelectorAll(".f-chip").forEach(b=>b.onclick=()=>{ state.ui.ordersFilter=b.getAttribute("data-c"); render(); });
+
+  let searchT=null;
+  search.addEventListener("input",()=>{ clearTimeout(searchT); searchT=setTimeout(()=>{ state.ui.ordersQuery=search.value; render(); const s2=document.querySelector('#app input[placeholder="Suchen…"]'); if(s2){ s2.focus(); s2.setSelectionRange(s2.value.length,s2.value.length); } },300); });
 
   seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{ state.ui.ordersView=b.getAttribute("data-v"); state.settings.kanbanMode=(state.ui.ordersView==="kanban"); saveSettings(); render(); });
-  filterSel.onchange=()=>{ state.ui.ordersFilter=filterSel.value; render(); };
 
-  if(Object.keys(state.orders).length===0){ wrap.appendChild(emptyBlock("Keine Bestellungen","Importiere einen Snapshot oder eine CSV.","#/import","Zum Import")); app.appendChild(wrap); return; }
+  if(Object.keys(state.orders).length===0){ wrap.appendChild(emptyBlock("Keine Bestellungen","Backend verbinden oder Snapshot importieren.","#/einstellungen","Einrichten")); app.appendChild(wrap); return; }
 
-  if(state.ui.ordersView==="kanban" && !state.ui.ordersFilter){
+  const q=normStr(state.ui.ordersQuery||"");
+  const matches=(o)=>!q||normStr(o.name+" "+(o.customerName||"")+" "+(o.customerEmail||"")).includes(q);
+
+  if(state.ui.ordersView==="kanban" && !state.ui.ordersFilter && !q){
     const board=el('<div class="board"></div>');
     CATS.forEach(cat=>{ const list=buckets[cat]||[]; const meta=CAT_META[cat]||{};
       const col=el('<div class="col"><div class="col-h"><span>'+esc(meta.ico||"")+'</span><span class="c-t">'+esc(cat)+'</span><span class="c-c">'+list.length+'</span></div><div class="col-body"></div></div>');
@@ -899,11 +980,11 @@ function viewOrders(app){
     });
     wrap.appendChild(board);
   } else {
-    let list=Object.values(state.orders);
+    let list=Object.values(state.orders).filter(matches);
     if(state.ui.ordersFilter) list=list.filter(o=>categorize(o,state.settings,now).primary===state.ui.ordersFilter);
     list.sort((a,b)=>b.createdAt-a.createdAt);
     const box=el('<div></div>');
-    if(!list.length) box.appendChild(el('<p class="muted">Keine Bestellungen in dieser Kategorie.</p>'));
+    if(!list.length) box.appendChild(el('<p class="muted">Keine Treffer.</p>'));
     list.forEach(o=>{ const {primary,badges}=categorize(o,state.settings,now); const meta=CAT_META[primary]||{};
       const it=el('<div class="list-item"></div>');
       it.innerHTML='<div style="flex:1;min-width:0"><div class="o-top"><span class="o-name">'+esc(o.name)+'</span> <span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span></div><div class="o-cust">'+esc(o.customerName||o.customerEmail||"—")+'</div><div class="o-badges">'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div><div style="text-align:right"><div class="o-total">'+esc(fmtMoney(o.totalPrice,o.currency))+'</div><div class="tiny muted">'+esc(fmtDate(o.createdAt))+'</div></div>';
@@ -937,15 +1018,13 @@ function viewOrderDetail(app,name){
   const o=state.orders[name]; if(!o){ app.appendChild(emptyBlock("Bestellung nicht gefunden","","#/bestellungen","Zurück")); return; }
   const now=Date.now(); const {primary,badges}=categorize(o,state.settings,now); const meta=CAT_META[primary]||{}; const m=o.miris||{};
   const wrap=el('<div></div>');
-  wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/bestellungen">‹ Zurück</a></div><h1 style="margin-top:10px">'+esc(o.name)+'</h1><div class="row" style="margin-top:6px"><span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span>'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div>';
+  wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/bestellungen">‹ Zurück</a></div><h1 style="margin-top:10px">'+esc(o.name)+'</h1>'+
+    '<p style="margin-top:4px">'+kundeLink(o.customerEmail,o.customerName)+' · '+esc(fmtMoney(o.totalPrice,o.currency))+' · '+esc(fmtDate(o.createdAt))+'</p>'+
+    '<div class="row" style="margin-top:6px"><span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span>'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div>';
 
   // Stammdaten
   const info=el('<div class="card"></div>');
   info.innerHTML='<h2 style="font-size:14px;margin-bottom:8px">Bestellung</h2>'+
-    kv("Kunde",esc(o.customerName||"—"))+
-    kv("E-Mail",o.customerEmail?'<a href="mailto:'+esc(o.customerEmail)+'" style="text-decoration:underline">'+esc(o.customerEmail)+'</a>':"—")+
-    kv("Datum",esc(fmtDateTime(o.createdAt)))+
-    kv("Summe",esc(fmtMoney(o.totalPrice,o.currency)))+
     kv("Zahlung",esc(o.financialStatus||"—"))+
     kv("Versand",esc(o.fulfillmentStatus||"—"))+
     (m.approval_status?kv("Vorschau-Status",esc(prettyToken(m.approval_status))):"")+
@@ -996,17 +1075,41 @@ function viewOrderDetail(app,name){
       row.appendChild(fb);
     }
     if((o.miris||{}).approval_url){
-      const vb=el('<button class="btn btn-sm">🎨 Vorschau-Mail erneut</button>');
+      const vb=el('<button class="btn btn-sm">🎨 Vorschau erneut</button>');
       vb.onclick=async()=>{ if(await confirmDialog("Vorschau-Mail erneut senden?","Kunde bekommt die Farbvorschau-E-Mail erneut, mit frischer 24h-Frist.","Erneut senden")) runAction(vb,"Vorschau-Mail gesendet","/resend-preview",null,()=>{ o.local.previewSentAt=Date.now(); saveOrders(); }); };
       row.appendChild(vb);
+    } else if(ful!=="fulfilled" && !unpaid){
+      const vb=el('<button class="btn btn-sm btn-primary">🎨 Vorschau senden</button>');
+      vb.onclick=()=>openPreviewUpload(o);
+      row.appendChild(vb);
+    }
+    if(o.customerEmail){
+      const eb=el('<button class="btn btn-sm">✉ E-Mail</button>');
+      eb.onclick=()=>openMailModal({email:o.customerEmail, firstName:(o.customerName||"").split(" ")[0], orderName:o.name});
+      row.appendChild(eb);
     }
     row.appendChild(el('<span class="spacer"></span>'));
     const cb=el('<button class="btn btn-sm btn-danger">Stornieren</button>');
     cb.onclick=async()=>{ if(await confirmDialog("Bestellung stornieren?",o.name+" wird in Shopify STORNIERT (mit Erstattung falls bezahlt, Bestand zurückgebucht, Kunde wird benachrichtigt). Das kann nicht rückgängig gemacht werden.","Stornieren",true)) runAction(cb,"Storniert","/cancel",{refund:true,restock:true,notify:true}); };
     row.appendChild(cb);
     ac.appendChild(row);
-    ac.appendChild(el('<p class="tiny muted" style="margin-top:10px">Aktionen wirken direkt in Shopify. Versand-Mail an den Kunden kommt von Shopify, Mahnung/Vorschau über deine Klaviyo-Flows.</p>'));
     wrap.appendChild(ac);
+  }
+
+  // Kontakt & Adresse (editierbar)
+  const addrEditable=(normStr(o.fulfillmentStatus)==="unfulfilled" && !o.cancelledAt)?[o]:[];
+  wrap.appendChild(addressCard(o, addrEditable));
+
+  // Farbvorschau-Karte (aktueller Stand + Upload)
+  if(liveConfigured() && !normStr(o.financialStatus).match(/voided|refunded/)){
+    const pv=el('<div class="card"></div>');
+    pv.innerHTML='<div class="row"><h2 style="font-size:14px;margin-bottom:8px">Farbvorschau</h2><span class="spacer"></span>'+
+      (m.approval_status?'<span class="badge '+(m.approval_status==="gesendet"?"info":m.approval_status==="versandbereit"?"ok":"warn")+'">'+esc(prettyToken(m.approval_status))+'</span>':'<span class="badge warn">noch keine</span>')+'</div>';
+    if(m.preview_url) pv.appendChild(el('<a href="'+safeUrl(m.preview_url)+'" target="_blank" rel="noopener"><img class="thumb" style="width:110px;height:110px" src="'+safeUrl(m.preview_url)+'" loading="lazy" alt="Farbvorschau"></a>'));
+    const upB=el('<button class="btn btn-sm '+(m.preview_url?"btn-ghost":"btn-primary")+'" style="margin-top:10px">'+(m.preview_url?"Neue Version hochladen & senden":"Foto wählen & senden")+'</button>');
+    upB.onclick=()=>openPreviewUpload(o);
+    pv.appendChild(upB);
+    wrap.appendChild(pv);
   }
 
   // Workflow-Toggles
@@ -1085,7 +1188,7 @@ function viewAnliegen(app){
       '<div style="font-weight:700;margin-top:8px">'+esc(a.thema||"—")+'</div>'+
       '<div class="small" style="margin-top:4px;white-space:pre-wrap">'+esc(a.nachricht||"")+'</div>'+
       (Array.isArray(a.replies)&&a.replies.length?'<div class="small" style="margin-top:8px;padding:8px;background:var(--ok-bg)"><b>Deine Antwort:</b> '+esc(a.replies[a.replies.length-1].text||"")+'</div>':"")+
-      '<div class="tiny muted" style="margin-top:8px">'+esc(a.customerName||"")+(a.customerEmail?" · "+esc(a.customerEmail):"")+' · '+esc(fmtDateTime(a.date))+'</div>'+
+      '<div class="tiny muted" style="margin-top:8px">'+(a.customerEmail?kundeLink(a.customerEmail,a.customerName||a.customerEmail):esc(a.customerName||""))+' · '+esc(fmtDateTime(a.date))+'</div>'+
       '</div></div>';
     const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
     if(a.customerEmail && liveConfigured() && a.fromDb){
@@ -1208,7 +1311,7 @@ function renderChatList(box){
       (c.verified?'<span class="badge ok">verifiziert</span>':'<span class="badge">Gast</span>')+
       (c.orderName?'<span class="badge">'+esc(c.orderName)+'</span>':"")+
       '<span class="badge muted">'+(c.messageCount!=null?c.messageCount+" Nachr.":"")+'</span></div>'+
-      '<div style="font-weight:700;margin-top:8px">'+esc(c.customerName||"(ohne Name)")+'</div>'+
+      '<div style="font-weight:700;margin-top:8px">'+(c.email?kundeLink(c.email,c.customerName||c.email):esc(c.customerName||"(ohne Name)"))+'</div>'+
       '<div class="small muted">'+esc(c.email||"—")+' · '+esc(fmtDateTime(c.updatedAt))+'</div>';
     const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
     const viewB=el('<button class="btn btn-sm btn-primary">Ansehen</button>'); viewB.onclick=()=>openChatViewer(c); acts.appendChild(viewB);
@@ -1255,6 +1358,289 @@ async function deleteChatsOfCustomer(email){
     state.ui.chatResults=(state.ui.chatResults||[]).filter(x=>x.email!==email);
     toast((res.deleted||0)+" Chat(s) gelöscht"); render();
   }catch(e){ toast("Löschen fehlgeschlagen: "+e.message,4000); }
+}
+
+/* ======================================================================
+   Kunden — Liste + Kundenakte (alles über einen Kunden auf einen Blick)
+   ====================================================================== */
+function normEmail(e){ return String(e||"").trim().toLowerCase(); }
+function aggregateCustomers(){
+  const map={};
+  const touch=(email,name)=>{
+    const key=normEmail(email); if(!key) return null;
+    if(!map[key]) map[key]={ email:key, name:"", orders:[], anliegen:[], revenue:0, first:null, last:null };
+    if(name && (!map[key].name || name.length>map[key].name.length)) map[key].name=name;
+    return map[key];
+  };
+  Object.values(state.orders).forEach(o=>{
+    const c=touch(o.customerEmail,o.customerName); if(!c) return;
+    c.orders.push(o);
+    if(normStr(o.financialStatus)==="paid") c.revenue+=num(o.totalPrice,0);
+    c.first=c.first?Math.min(c.first,o.createdAt):o.createdAt;
+    c.last=c.last?Math.max(c.last,o.createdAt):o.createdAt;
+  });
+  Object.values(state.anliegen).forEach(a=>{
+    const c=touch(a.customerEmail,a.customerName); if(!c) return;
+    c.anliegen.push(a);
+    c.last=c.last?Math.max(c.last,a.date):a.date;
+  });
+  return map;
+}
+function kundeLink(email,name){
+  const key=normEmail(email); if(!key) return esc(name||"—");
+  return '<a href="#/kunde/'+encodeURIComponent(key)+'" style="text-decoration:underline">'+esc(name||key)+'</a>';
+}
+function viewKunden(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Kunden","");
+  const search=el('<input type="text" placeholder="Name oder E-Mail…" value="'+esc(state.ui.kundenQuery||"")+'" style="max-width:340px;margin-bottom:12px">');
+  wrap.appendChild(search);
+  const box=el('<div></div>'); wrap.appendChild(box);
+  const renderList=()=>{
+    box.innerHTML="";
+    const q=normStr(state.ui.kundenQuery||"");
+    const list=Object.values(aggregateCustomers())
+      .filter(c=>!q||normStr(c.name+" "+c.email).includes(q))
+      .sort((a,b)=>(b.last||0)-(a.last||0));
+    if(!list.length){ box.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◎</div><p>Keine Kunden gefunden.</p></div></div>')); return; }
+    list.forEach(c=>{
+      const it=el('<div class="list-item"></div>');
+      it.innerHTML='<div style="flex:1;min-width:0"><div style="font-weight:800">'+esc(c.name||c.email)+'</div><div class="small muted" style="overflow:hidden;text-overflow:ellipsis">'+esc(c.email)+'</div></div>'+
+        '<div style="text-align:right"><div class="small"><b>'+c.orders.length+'</b> Best. · '+esc(fmtMoney(c.revenue))+'</div><div class="tiny muted">'+(c.last?esc(fmtDate(c.last)):"—")+'</div></div>';
+      it.onclick=()=>nav("#/kunde/"+encodeURIComponent(c.email));
+      box.appendChild(it);
+    });
+  };
+  let t=null;
+  search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>{ state.ui.kundenQuery=search.value; renderList(); },200); });
+  renderList();
+  app.appendChild(wrap);
+}
+function viewKunde(app,emailArg){
+  const email=normEmail(emailArg);
+  const c=aggregateCustomers()[email];
+  if(!c){ app.appendChild(emptyBlock("Kunde nicht gefunden","","#/kunden","Zur Kundenliste")); return; }
+  const now=Date.now();
+  const wrap=el('<div></div>');
+  wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/kunden">‹ Kunden</a></div>'+
+    '<h1 style="margin-top:10px">'+esc(c.name||c.email)+'</h1>'+
+    '<p><a href="mailto:'+esc(c.email)+'" style="text-decoration:underline">'+esc(c.email)+'</a></p></div>';
+  // Stat-Chips
+  const st=el('<div class="stat-row" style="margin-bottom:14px"></div>');
+  st.innerHTML=statChip(c.orders.length,"Bestellungen","#")+statChip(fmtMoney(c.revenue),"Umsatz","#")+statChip(c.anliegen.length,"Anliegen","#")+(c.first?statChip(fmtDate(c.first),"Kunde seit","#"):"");
+  st.querySelectorAll("a").forEach(a=>a.onclick=(e)=>e.preventDefault());
+  wrap.appendChild(st);
+  // Aktionen
+  const acts=el('<div class="row" style="gap:8px;margin-bottom:16px"></div>');
+  if(liveConfigured()){
+    const mb=el('<button class="btn btn-primary">✉ E-Mail senden</button>');
+    mb.onclick=()=>openMailModal({email:c.email, firstName:(c.name||"").split(" ")[0], orderName:(c.orders[0]||{}).name||""});
+    acts.appendChild(mb);
+    const db=el('<button class="btn btn-danger btn-sm" style="margin-left:auto">DSGVO-Löschung</button>');
+    db.onclick=()=>{ state.ui.dsgvoPrefill=c.email; nav("#/dsgvo"); };
+    acts.appendChild(db);
+  }
+  wrap.appendChild(acts);
+  // Kontakt & Adresse (aus neuester Bestellung, editierbar wenn möglich)
+  const latest=c.orders.slice().sort((a,b)=>b.createdAt-a.createdAt)[0];
+  if(latest){
+    const editable=c.orders.filter(o=>normStr(o.fulfillmentStatus)==="unfulfilled" && !o.cancelledAt);
+    wrap.appendChild(addressCard(latest, editable));
+  }
+  // Bestellungen
+  if(c.orders.length){
+    const oc=sectionCard("Bestellungen");
+    c.orders.slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(o=>{
+      const {primary}=categorize(o,state.settings,now); const meta=CAT_META[primary]||{};
+      oc.appendChild(el('<a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-row" style="text-decoration:none"><span class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(fmtDate(o.createdAt))+' · '+esc(fmtMoney(o.totalPrice,o.currency))+'</span></span><span class="badge '+(meta.k||"muted")+'">'+esc(primary)+'</span></a>'));
+    });
+    wrap.appendChild(oc);
+  }
+  // Anliegen
+  if(c.anliegen.length){
+    const ac=sectionCard("Anliegen");
+    c.anliegen.slice().sort((a,b)=>b.date-a.date).forEach(a=>{
+      ac.appendChild(el('<a href="#/anliegen" class="q-row" style="text-decoration:none"><span class="q-main"><b>'+esc(a.thema||a.kind)+'</b> <span class="muted">'+esc(fmtDate(a.date))+'</span></span><span class="badge '+(a.status==="neu"?"warn":a.status==="erledigt"?"muted":"ok")+'">'+esc(a.status)+'</span></a>'));
+    });
+    wrap.appendChild(ac);
+  }
+  // Chats (lazy vom Backend)
+  const cc=sectionCard("Chats");
+  const cbody=el('<div class="q-row"><span class="q-main muted small">Lade…</span></div>'); cc.appendChild(cbody);
+  wrap.appendChild(cc);
+  if(liveConfigured()){
+    liveFetch("/admin/chats?q="+encodeURIComponent(c.email)+"&limit=20").then(r=>{
+      cc.removeChild(cbody);
+      const chats=r.chats||[];
+      if(!chats.length){ cc.appendChild(el('<div class="q-row"><span class="q-main muted small">Keine Chats.</span></div>')); return; }
+      chats.forEach(ch=>{
+        const row=el('<div class="q-row"><span class="q-main"><b>'+esc(fmtDateTime(ch.updatedAt))+'</b> <span class="muted">'+(ch.messageCount!=null?ch.messageCount+" Nachr.":"")+(ch.orderName?" · "+esc(ch.orderName):"")+'</span></span></div>');
+        const vb=el('<button class="btn btn-sm btn-ghost">Ansehen</button>'); vb.onclick=()=>openChatViewer(ch); row.appendChild(vb);
+        cc.appendChild(row);
+      });
+    }).catch(()=>{ const q=cbody.querySelector(".q-main"); if(q) q.textContent="Chats gerade nicht erreichbar."; });
+  } else { cbody.querySelector(".q-main").textContent="Nur im Live-Modus."; }
+  // Augenbilder dieses Kunden
+  const imgs=Object.values(state.images).filter(im=>c.orders.some(o=>o.name===im.orderName));
+  if(imgs.length){
+    const ic=sectionCard("Augenbilder");
+    const grid=el('<div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px"></div>');
+    imgs.forEach(im=>grid.appendChild(el('<a href="'+safeUrl(im.imageUrl)+'" target="_blank" rel="noopener"><img class="thumb" src="'+safeUrl(im.imageUrl)+'" loading="lazy" alt=""></a>')));
+    ic.appendChild(grid);
+    wrap.appendChild(ic);
+  }
+  // Sendeprotokoll (lokal)
+  const sent=(state.sentMails[c.email]||[]);
+  if(sent.length){
+    const sc2=sectionCard("Gesendete E-Mails");
+    sent.slice().reverse().forEach(m=>sc2.appendChild(el('<div class="q-row"><span class="q-main"><b>'+esc(m.subject)+'</b> <span class="muted">'+esc(fmtDateTime(m.ts))+'</span></span></div>')));
+    wrap.appendChild(sc2);
+  }
+  app.appendChild(wrap);
+}
+function sectionCard(title){
+  const c=el('<div class="card q-card"></div>');
+  c.innerHTML='<div class="q-head"><h2>'+esc(title)+'</h2></div>';
+  return c;
+}
+
+/* ---------- Adresse & Kontakt bearbeiten ---------- */
+function addressCard(order, editableOrders){
+  const a=order.shippingAddress||{};
+  const card=el('<div class="card"></div>');
+  card.innerHTML='<div class="row"><h2 style="font-size:14px;margin-bottom:8px">Kontakt & Adresse</h2><span class="spacer"></span></div>'+
+    '<div id="addr-view">'+
+    kv("E-Mail",esc(order.customerEmail||"—"))+
+    kv("Name",esc(((a.firstName||"")+" "+(a.lastName||"")).trim()||order.customerName||"—"))+
+    kv("Adresse",esc([a.address1,a.address2].filter(Boolean).join(", ")||"—"))+
+    kv("PLZ / Ort",esc([a.zip,a.city].filter(Boolean).join(" ")||"—"))+
+    kv("Land",esc(a.country||"—"))+
+    (a.phone?kv("Telefon",esc(a.phone)):"")+
+    '</div>';
+  if(liveConfigured()){
+    const canAddr=(editableOrders||[order]).length>0;
+    const eb=el('<button class="btn btn-sm btn-ghost" style="margin-top:10px">Bearbeiten</button>');
+    eb.onclick=()=>openAddressForm(canAddr?(editableOrders||[order]):[order], !canAddr);
+    card.appendChild(eb);
+    if(!canAddr) card.appendChild(el('<p class="tiny muted" style="margin-top:6px">Bestellung versendet/storniert – nur E-Mail änderbar.</p>'));
+  }
+  return card;
+}
+function openAddressForm(orders, emailOnly){
+  const o=orders[0]; const a=o.shippingAddress||{};
+  const sel=orders.length>1?'<label class="field"><span>Bestellung</span><select id="af-order">'+orders.map(x=>'<option value="'+esc(x.name)+'">'+esc(x.name)+'</option>').join("")+'</select></label>':"";
+  const dis=emailOnly?' disabled':"";
+  const m=showModal('<h2>Adresse bearbeiten</h2>'+sel+
+    '<label class="field"><span>E-Mail</span><input type="email" id="af-email" value="'+esc(o.customerEmail||"")+'"></label>'+
+    '<div class="row" style="gap:8px"><label class="field" style="flex:1"><span>Vorname</span><input type="text" id="af-fn" value="'+esc(a.firstName||"")+'"'+dis+'></label>'+
+    '<label class="field" style="flex:1"><span>Nachname</span><input type="text" id="af-ln" value="'+esc(a.lastName||"")+'"'+dis+'></label></div>'+
+    '<label class="field"><span>Straße + Hausnummer</span><input type="text" id="af-a1" value="'+esc(a.address1||"")+'"'+dis+'></label>'+
+    '<label class="field"><span>Adresszusatz</span><input type="text" id="af-a2" value="'+esc(a.address2||"")+'"'+dis+'></label>'+
+    '<div class="row" style="gap:8px"><label class="field" style="max-width:120px"><span>PLZ</span><input type="text" id="af-zip" value="'+esc(a.zip||"")+'"'+dis+'></label>'+
+    '<label class="field" style="flex:1"><span>Ort</span><input type="text" id="af-city" value="'+esc(a.city||"")+'"'+dis+'></label></div>'+
+    '<label class="field"><span>Telefon</span><input type="text" id="af-ph" value="'+esc(a.phone||"")+'"'+dis+'></label>'+
+    '<p class="tiny muted">Land: '+esc(a.country||"—")+' (nicht änderbar)'+(emailOnly?' · Adresse gesperrt (versendet/storniert)':"")+'</p>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="save">Speichern</button></div>',{sticky:true});
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  const save=m.querySelector('[data-x=save]');
+  save.onclick=async()=>{
+    const orderName=m.querySelector("#af-order")?m.querySelector("#af-order").value:o.name;
+    const body={};
+    const newEmail=m.querySelector("#af-email").value.trim();
+    if(newEmail && newEmail!==(o.customerEmail||"")) body.email=newEmail;
+    if(!emailOnly){
+      body.shippingAddress={
+        firstName:m.querySelector("#af-fn").value, lastName:m.querySelector("#af-ln").value,
+        address1:m.querySelector("#af-a1").value, address2:m.querySelector("#af-a2").value,
+        zip:m.querySelector("#af-zip").value, city:m.querySelector("#af-city").value,
+        phone:m.querySelector("#af-ph").value,
+      };
+    }
+    if(!body.email && !body.shippingAddress){ toast("Nichts geändert"); return; }
+    save.disabled=true; save.innerHTML='<span class="spin"></span> Speichere…';
+    try{
+      await liveFetch("/admin/orders/"+encodeURIComponent(orderName)+"/shipping",{method:"PATCH",body:JSON.stringify(body)});
+      closeModal(); toast("Gespeichert ✓ – in Shopify aktualisiert");
+      try{ await liveSyncAll(); }catch(e){} render();
+    }catch(e){ save.disabled=false; save.textContent="Speichern"; toast(e.message,5000); }
+  };
+}
+
+/* ---------- Freie Kunden-E-Mail (M.IRIS-Stil) ---------- */
+function openMailModal({email, firstName, orderName}){
+  const presets=[
+    { id:"frage", label:"Frage zur Bestellung", subject:"Frage zu deiner Bestellung"+(orderName?" "+orderName:"") },
+    { id:"frei", label:"Freie Nachricht", subject:"" },
+  ];
+  const m=showModal('<h2>E-Mail an '+esc(firstName||email)+'</h2>'+
+    '<p class="tiny muted">'+esc(email)+' · Anrede & Gruß ergänzt die E-Mail automatisch</p>'+
+    '<div class="seg" style="margin:12px 0" id="mm-preset">'+presets.map((p,i)=>'<button data-i="'+i+'" class="'+(i===0?"on":"")+'">'+esc(p.label)+'</button>').join("")+'</div>'+
+    '<label class="field"><span>Betreff</span><input type="text" id="mm-subj" value="'+esc(presets[0].subject)+'"></label>'+
+    '<label class="field"><span>Nachricht (nur der Mittelteil)</span><textarea id="mm-msg" style="min-height:130px"></textarea></label>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden ✉</button></div>',{sticky:true});
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  m.querySelectorAll("#mm-preset button").forEach(b=>b.onclick=()=>{
+    m.querySelectorAll("#mm-preset button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+    m.querySelector("#mm-subj").value=presets[parseInt(b.getAttribute("data-i"),10)].subject;
+  });
+  const send=m.querySelector('[data-x=send]');
+  send.onclick=async()=>{
+    const subject=m.querySelector("#mm-subj").value.trim();
+    const message=m.querySelector("#mm-msg").value.trim();
+    if(!subject){ toast("Betreff fehlt"); return; }
+    if(message.length<2){ toast("Nachricht fehlt"); return; }
+    send.disabled=true; send.innerHTML='<span class="spin"></span> Sende…';
+    try{
+      await liveFetch("/admin/customers/email",{method:"POST",body:JSON.stringify({email, firstName, subject, message, orderName:orderName||undefined})});
+      const key=normEmail(email);
+      state.sentMails[key]=(state.sentMails[key]||[]).concat([{ts:Date.now(), subject, orderName:orderName||""}]).slice(-50);
+      saveSentMails();
+      closeModal(); toast("E-Mail gesendet an "+email+" ✓"); render();
+    }catch(e){ send.disabled=false; send.textContent="Senden ✉"; toast(e.message,5000); }
+  };
+  m.querySelector("#mm-msg").focus();
+}
+
+/* ---------- Farbvorschau hochladen + senden ---------- */
+function openPreviewUpload(o){
+  const m=showModal('<h2>Farbvorschau senden – '+esc(o.name)+'</h2>'+
+    '<p class="tiny muted">Foto wählen → Upload → der Kunde bekommt sofort die Freigabe-Mail (24h-Frist).</p>'+
+    '<input type="file" id="pv-file" accept="image/*" style="margin:12px 0">'+
+    '<div id="pv-prev" style="display:none;margin-bottom:10px"><img id="pv-img" style="max-width:100%;max-height:220px;border:1px solid var(--line2)"></div>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send" disabled>Hochladen & senden 🎨</button></div>',{sticky:true});
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  const fileInput=m.querySelector("#pv-file"), send=m.querySelector('[data-x=send]');
+  let payload=null;
+  fileInput.onchange=()=>{
+    const f=fileInput.files[0]; if(!f) return;
+    if(!/^image\/(jpeg|jpg|png|webp)$/i.test(f.type)){ toast("Nur JPG, PNG oder WebP"); fileInput.value=""; return; }
+    const img=new Image();
+    const blobUrl=URL.createObjectURL(f);
+    img.onload=()=>{
+      // Client-Downscale: max 2500px, JPEG 0.85 → kleine Payload, schneller Versand
+      const maxDim=2500; let w=img.width, h=img.height;
+      if(Math.max(w,h)>maxDim){ const f2=maxDim/Math.max(w,h); w=Math.round(w*f2); h=Math.round(h*f2); }
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      const dataUrl=cv.toDataURL("image/jpeg",0.85);
+      payload={ imageBase64:dataUrl, mimeType:"image/jpeg" };
+      m.querySelector("#pv-img").src=dataUrl;
+      m.querySelector("#pv-prev").style.display="block";
+      send.disabled=false;
+      URL.revokeObjectURL(blobUrl);
+    };
+    img.onerror=()=>{ toast("Bild konnte nicht gelesen werden"); URL.revokeObjectURL(blobUrl); };
+    img.src=blobUrl;
+  };
+  send.onclick=async()=>{
+    if(!payload) return;
+    send.disabled=true; send.innerHTML='<span class="spin"></span> Sende…';
+    try{
+      const r=await liveFetch("/admin/orders/"+encodeURIComponent(o.name)+"/send-preview",{method:"POST",body:JSON.stringify(payload)});
+      o.local.previewSentAt=Date.now(); saveOrders();
+      closeModal(); toast("Farbvorschau gesendet an "+(r.to||"Kunde")+" ✓ (Frist 24h)");
+      try{ await liveSyncAll(); }catch(e){} render();
+    }catch(e){ send.disabled=false; send.textContent="Hochladen & senden 🎨"; toast(e.message,6000); }
+  };
 }
 
 function viewGaps(app){
@@ -1319,7 +1705,7 @@ function viewGdpr(app){
     const dz=el('<div class="card" style="margin-top:12px"></div>');
     dz.innerHTML='<h2 style="font-size:14px;margin-bottom:6px">🧹 Kunde komplett löschen (DSGVO-Anfrage)</h2>'+
       '<p class="tiny muted" style="margin-bottom:10px">Löscht in einem Durchgang alles zu einem Kunden. E-Mail und/oder Bestellnummer angeben.</p>'+
-      '<div class="row" style="gap:8px"><input type="text" id="dz-email" placeholder="kunde@mail.de" style="flex:1;min-width:160px"><input type="text" id="dz-order" placeholder="B1027" style="max-width:110px"></div>'+
+      '<div class="row" style="gap:8px"><input type="text" id="dz-email" placeholder="kunde@mail.de" value="'+esc(state.ui.dsgvoPrefill||"")+'" style="flex:1;min-width:160px"><input type="text" id="dz-order" placeholder="B1027" style="max-width:110px"></div>'+
       '<div class="row" style="gap:14px;margin-top:10px;flex-wrap:wrap" id="dz-opts">'+
       '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="photos" checked> Augenfotos</label>'+
       '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="chats" checked> Chat-Verläufe</label>'+
@@ -1354,6 +1740,7 @@ function viewGdpr(app){
     dz.appendChild(goRow);
     dz.appendChild(el('<p class="tiny muted" style="margin-top:8px">„Klaviyo-Profil" braucht einen API-Key mit Data-Privacy-Recht. Jede Löschung wird protokolliert (Nachweis).</p>'));
     wrap.appendChild(dz);
+    state.ui.dsgvoPrefill="";
   }
 
   const imgs=Object.values(state.images);
@@ -1458,36 +1845,19 @@ function addTaskFor(opts){
     if(!state.days[ds]) state.days[ds]=[]; state.days[ds].push({id:uid(),text,done:false,priority:0,linkedOrder:opts.linkedOrder||null,linkedAnliegen:opts.linkedAnliegen||null,createdAt:Date.now()}); saveDays(); toast("Aufgabe für heute angelegt"); render(); });
 }
 
-function viewImport(app){
-  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Import / Sync","Daten ins Cockpit holen – live, per Snapshot, CSV oder E-Mail.");
-  // live
-  const live=el('<div class="card"></div>');
-  live.innerHTML='<h2 style="font-size:15px">Live-Sync</h2><p class="muted small" style="margin:6px 0 12px">'+(liveConfigured()?"Backend hinterlegt. Holt Bestellungen (und ab Phase 3 Anliegen/Bilder) direkt aus deinem Admin-Dienst.":"Noch kein Backend hinterlegt. Trage Backend-URL & Admin-Token in den Einstellungen ein, sobald der Dienst läuft (Phase 2).")+'</p>';
-  const lb=el('<button class="btn '+(liveConfigured()?"btn-primary":"btn-ghost")+'" '+(liveConfigured()?"":"disabled")+'>⟳ Jetzt live synchronisieren</button>'); lb.onclick=()=>doLiveSync(); live.appendChild(lb);
-  if(!liveConfigured()) live.appendChild(el('<a class="btn btn-ghost" href="#/einstellungen" style="margin-left:8px">Zu den Einstellungen</a>'));
-  wrap.appendChild(live);
-
-  // snapshot
-  const snap=el('<div class="card"></div>');
-  snap.innerHTML='<h2 style="font-size:15px">Daten-Snapshot (JSON)</h2><p class="muted small" style="margin:6px 0 10px">Bitte Claude um einen aktuellen Snapshot (Bestellungen + Anliegen + Bilder aus Shopify/Gmail) und füge ihn hier ein. Bestehende lokale Markierungen bleiben erhalten.</p>';
-  const promptBtn=el('<button class="btn btn-sm btn-ghost">Claude-Prompt kopieren</button>'); promptBtn.onclick=()=>{ copyText(SNAPSHOT_PROMPT); toast("Prompt kopiert – an Claude senden"); }; snap.appendChild(promptBtn);
-  const ta=el('<textarea id="snap-in" placeholder=\'{ "snapshotVersion":1, "orders":[…], "anliegen":[…] }\' style="min-height:120px;margin-top:10px"></textarea>'); snap.appendChild(ta);
-  const sb=el('<button class="btn btn-primary" style="margin-top:8px">Snapshot importieren</button>'); sb.onclick=()=>{ try{ const r=importSnapshot(ta.value); toast("Import: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert · "+r.anliegen.added+" Anliegen"); render(); }catch(e){ toast(e.message,4000); } }; snap.appendChild(sb);
-  wrap.appendChild(snap);
-
-  // CSV
-  const csv=el('<div class="card"></div>');
-  csv.innerHTML='<h2 style="font-size:15px">Shopify-CSV</h2><p class="muted small" style="margin:6px 0 10px">Shopify-Bestellexport (CSV). Hinweis: die CSV enthält keine Farbvorschau-Metafelder – diese Spalten bleiben leer und werden über lokale Schalter gepflegt.</p>';
-  const file=el('<input type="file" accept=".csv,text/csv">'); file.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const r=importCSV(rd.result); toast("CSV: "+r.added+" neu, "+r.updated+" aktualisiert"); render(); }catch(err){ toast(err.message,4000); } }; rd.readAsText(f); }; csv.appendChild(file);
-  wrap.appendChild(csv);
-
-  // email
-  const eml=el('<div class="card"></div>');
-  eml.innerHTML='<h2 style="font-size:15px">E-Mail einfügen</h2><p class="muted small" style="margin:6px 0 10px">"Chat-Nachricht"-, "Feedback"- oder Widerruf-Mail als Anliegen erfassen.</p>';
-  const eb=el('<button class="btn btn-ghost">E-Mail-Text einfügen…</button>'); eb.onclick=openEmailPaste; eml.appendChild(eb);
-  wrap.appendChild(eml);
-
-  app.appendChild(wrap);
+/* Import-Werkzeuge (Snapshot/CSV/E-Mail) — leben jetzt in den Einstellungen ("Daten"-Karte). */
+function renderImportTools(container){
+  const snap=el('<details style="margin-top:10px"><summary class="small" style="cursor:pointer;padding:6px 0">Snapshot (JSON) importieren</summary></details>');
+  const promptBtn=el('<button class="btn btn-sm btn-ghost" style="margin-top:8px">Claude-Prompt kopieren</button>'); promptBtn.onclick=()=>{ copyText(SNAPSHOT_PROMPT); toast("Prompt kopiert"); }; snap.appendChild(promptBtn);
+  const ta=el('<textarea id="snap-in" placeholder=\'{ "snapshotVersion":1, … }\' style="min-height:100px;margin-top:8px"></textarea>'); snap.appendChild(ta);
+  const sb=el('<button class="btn btn-sm btn-primary" style="margin-top:8px">Importieren</button>'); sb.onclick=()=>{ try{ const r=importSnapshot(ta.value); toast("Import: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert · "+r.anliegen.added+" Anliegen"); render(); }catch(e){ toast(e.message,4000); } }; snap.appendChild(sb);
+  container.appendChild(snap);
+  const csv=el('<details style="margin-top:6px"><summary class="small" style="cursor:pointer;padding:6px 0">Shopify-CSV importieren</summary><p class="tiny muted" style="margin:6px 0">Ohne Farbvorschau-Felder – die pflegt der Live-Sync.</p></details>');
+  const file=el('<input type="file" accept=".csv,text/csv" style="margin-top:4px">'); file.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const r=importCSV(rd.result); toast("CSV: "+r.added+" neu, "+r.updated+" aktualisiert"); render(); }catch(err){ toast(err.message,4000); } }; rd.readAsText(f); }; csv.appendChild(file);
+  container.appendChild(csv);
+  const eml=el('<details style="margin-top:6px"><summary class="small" style="cursor:pointer;padding:6px 0">E-Mail als Anliegen erfassen</summary></details>');
+  const eb=el('<button class="btn btn-sm btn-ghost" style="margin-top:8px">E-Mail-Text einfügen…</button>'); eb.onclick=openEmailPaste; eml.appendChild(eb);
+  container.appendChild(eml);
 }
 async function doLiveSync(opts){
   if(!liveConfigured()){ nav("#/einstellungen"); return; }
@@ -1514,6 +1884,8 @@ function openGlobalSearch(){
       .forEach(o=>frag.appendChild(row("▦",o.name+" · "+fmtMoney(o.totalPrice,o.currency),(o.customerName||o.customerEmail||"")+" · "+categorize(o,state.settings,Date.now()).primary,"#/bestellung/"+encodeURIComponent(o.name))));
     Object.values(state.anliegen).filter(a=>normStr((a.thema||"")+" "+(a.nachricht||"")+" "+(a.customerName||"")+" "+(a.customerEmail||"")+" "+(a.relatedOrder||"")).includes(q)).slice(0,6)
       .forEach(a=>frag.appendChild(row("✉",a.thema||a.kind,(a.customerName||"")+" · "+a.status,"#/anliegen")));
+    Object.values(aggregateCustomers()).filter(c=>normStr(c.name+" "+c.email).includes(q)).slice(0,4)
+      .forEach(c=>frag.appendChild(row("◎",c.name||c.email,c.orders.length+" Bestellungen · "+fmtMoney(c.revenue),"#/kunde/"+encodeURIComponent(c.email))));
     res.appendChild(frag);
     if(liveConfigured()){
       try{
@@ -1559,6 +1931,7 @@ function viewSettings(app){
     persist(["orders","anliegen","images"]); toast(n+" Demo-Einträge entfernt"); render(); };
   data.appendChild(demoB);
   const clrB=el('<button class="btn btn-danger" style="margin-left:8px">Alle Daten löschen</button>'); clrB.onclick=async()=>{ if(await confirmDialog("Alles löschen?","Wirklich ALLE lokalen Cockpit-Daten löschen? Backup vorher exportieren!","Alles löschen",true)){ Object.values(K).forEach(k=>Store.remove(k)); location.reload(); } }; data.appendChild(clrB);
+  renderImportTools(data);
   wrap.appendChild(data);
   // about
   wrap.appendChild(el('<p class="muted tiny" style="margin-top:16px;text-align:center">M.IRIS Cockpit · Speicher: '+(Store.available?"localStorage":"nur Arbeitsspeicher (Achtung: nicht dauerhaft)")+' · Schema v'+SCHEMA_VERSION+'</p>'));
