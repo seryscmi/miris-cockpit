@@ -1012,7 +1012,7 @@ function openReplyModal(a){
     '<h2>Antwort an '+esc(a.customerName||a.customerEmail)+'</h2>'+
     '<p class="tiny muted">'+esc(a.thema||a.kind)+(a.relatedOrder?' · '+esc(a.relatedOrder):'')+' → '+esc(a.customerEmail)+'</p>'+
     '<div class="small" style="margin:10px 0;padding:8px;background:var(--surface2);max-height:100px;overflow-y:auto;white-space:pre-wrap">'+esc(a.nachricht||"")+'</div>'+
-    '<label class="field"><span>Deine Antwort (geht sofort als M.IRIS-E-Mail raus)</span><textarea id="rp-in" style="min-height:140px" placeholder="Hallo… "></textarea></label>'+
+    '<label class="field"><span>Deine Antwort (geht sofort als M.IRIS-E-Mail raus)</span><textarea id="rp-in" style="min-height:140px" placeholder="Nur den Mittelteil schreiben – Anrede („Hallo '+esc((a.customerName||"").split(" ")[0]||"…")+', vielen Dank…“) und Gruß („Liebe Grüße, dein M.IRIS Team“) ergänzt die E-Mail automatisch."></textarea></label>'+
     '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden ✉</button></div>',
     {sticky:true}
   );
