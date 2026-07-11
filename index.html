@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="M.IRIS Cockpit">
 <meta name="theme-color" content="#efefef">
+<link rel="manifest" href="manifest.json">
 <title>M.IRIS Cockpit</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20fill='%23efefef'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='30'%20fill='none'%20stroke='%231c1c1c'%20stroke-width='6'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='11'%20fill='%231c1c1c'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20fill='%231c1c1c'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='30'%20fill='none'%20stroke='%23efefef'%20stroke-width='6'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='11'%20fill='%23efefef'/%3E%3C/svg%3E">
@@ -48,6 +49,9 @@ h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.06em;text-tran
 }
 #topbar .brand{font-family:var(--serif);font-weight:700;letter-spacing:.22em;text-transform:uppercase;font-size:16px}
 #topbar .tb-title{font-family:var(--serif);letter-spacing:.14em;text-transform:uppercase;font-size:13px;color:var(--ink2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#topbar .tb-icon{background:none;border:1px solid var(--line2);color:var(--ink);width:34px;height:34px;font-size:17px;line-height:1;cursor:pointer;padding:0}
+#topbar .tb-icon:hover{background:var(--surface)}
+#topbar .tb-icon.spinning{animation:sp 1s linear infinite}
 #topbar .tb-mode{font-size:10px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);padding:3px 7px;color:var(--ink2)}
 #topbar .tb-mode.live{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 
@@ -231,6 +235,8 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 <div id="topbar">
   <span class="brand">M.IRIS</span>
   <span class="tb-title" id="tb-title">Cockpit</span>
+  <button class="tb-icon" id="tb-search" title="Suchen" aria-label="Suchen">⌕</button>
+  <button class="tb-icon" id="tb-sync" title="Aktualisieren" aria-label="Aktualisieren">⟳</button>
   <span class="tb-mode" id="tb-mode">Import</span>
 </div>
 <div class="wrap">
@@ -407,6 +413,13 @@ function loadState(){
   state.days = sanitizeDays(Store.get(K.days,{}));
   state.importlog = Store.get(K.importlog,{}) || {};
   const dm = Store.get(K.dismissed,{}); state.dismissed = (dm && typeof dm==="object" && !Array.isArray(dm)) ? dm : {};
+  // Speicher-Hygiene: Altlasten automatisch ausmisten
+  try{
+    const now=Date.now(); let prunedI=0, prunedD=0;
+    Object.keys(state.images).forEach(id=>{ const im=state.images[id]; if(im.deletedAt && now-im.deletedAt>30*86400000){ delete state.images[id]; prunedI++; } });
+    Object.keys(state.dismissed).forEach(id=>{ if(now-state.dismissed[id]>180*86400000){ delete state.dismissed[id]; prunedD++; } });
+    if(prunedI) persist(["images"]); if(prunedD) persist(["dismissed"]);
+  }catch(e){}
   state.ui.ordersView = state.settings.kanbanMode ? "kanban" : "liste";
 }
 function mapSanitize(raw, fn, keyField){
@@ -478,18 +491,19 @@ function categorize(o, settings, now){
     const overdue = ageDays(o.createdAt,now) >= (settings.mahnungDays||7) && !L.mahnungSentAt;
     return {primary: overdue?"Mahnung fällig":"Zahlung offen", badges};
   }
-  if(fin==="voided"||fin==="refunded"){
+  if(fin==="voided"||fin==="refunded"||fin==="partially_refunded"){
     return {primary: ful==="fulfilled"?"Versendet":"Erledigt", badges};
   }
   // ab hier: bezahlt (inkl. 0 €)
-  if(ful==="fulfilled") return {primary:"Versendet",badges};
+  if(ful==="fulfilled" || L.shippedMarkedAt) return {primary:"Versendet",badges};
   if(isRepair) return {primary:"Reparatur",badges};
   // Set-Bestellung, bezahlt, unfulfilled → Farbvorschau-Lebenszyklus
   const approved = dec.indexOf("freigegeben")>=0 || appr==="versandbereit" || appr==="freigegeben";
   if(approved) return {primary:"Freigegeben – muss versendet werden",badges};
   const revision = appr.indexOf("revision")>=0 || appr.indexOf("überarbeit")>=0 || dec.indexOf("revision")>=0 || dec.indexOf("änderung")>=0;
   if(revision){ badges.push({t:"Überarbeitung",k:"warn"}); return {primary:"Farbvorschau offen",badges}; }
-  const sent = !!(m.preview_url||m.approval_url||m.preview_sent_at||L.previewSentAt) && appr!=="offen";
+  // Vorschau existiert/wurde gesendet → wartet auf Freigabe (unabhängig vom approval_status-Wortlaut)
+  const sent = !!(m.preview_url||m.approval_url||m.preview_sent_at||L.previewSentAt);
   if(sent) return {primary:"Vorschau gesendet – wartet auf Freigabe",badges};
   return {primary:"Farbvorschau offen",badges};
 }
@@ -637,7 +651,7 @@ function importCSV(text){
   const byName={};
   for(let r=1;r<rows.length;r++){ const row=rows[r]; const name=(row[iName]||"").trim(); if(!name) continue;
     if(!byName[name]){ byName[name]={ name, customerName:iCust>=0?row[iCust]:"", customerEmail:iEmail>=0?row[iEmail]:"",
-      createdAt:iCreated>=0?row[iCreated]:null, totalPrice:iTot>=0?parseFloat(String(row[iTot]).replace(",","."))||0:0,
+      createdAt:iCreated>=0?row[iCreated]:null, totalPrice:iTot>=0?parseFloat(String(row[iTot]).replace(/\.(?=\d{3}(\D|$))/g,"").replace(",","."))||0:0,
       currency:"EUR", financialStatus:iFin>=0?row[iFin]:"", fulfillmentStatus:iFul>=0?row[iFul]:"", lineItems:[], miris:{} }; }
   }
   return mergeOrders(Object.values(byName));
@@ -645,7 +659,7 @@ function importCSV(text){
 function parseEmail(raw){
   const text=String(raw||""); const low=text.toLowerCase();
   let kind="Sonstiges", customerName="", customerEmail="", thema="", nachricht="", relatedOrder=null, widerrufAdminUrl=null;
-  const orderMatch=text.match(/B\d{3,5}/); if(orderMatch) relatedOrder=orderMatch[0];
+  const orderMatch=text.match(/B\d{3,6}/); if(orderMatch) relatedOrder=orderMatch[0];
   const emailMatch=text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(emailMatch) customerEmail=emailMatch[0];
   const grab=(label)=>{ const re=new RegExp(label+"\\s*[:\\n]\\s*(.+)","i"); const m=text.match(re); return m?m[1].trim():""; };
   if(/widerruf/i.test(low)){ kind="Widerruf"; customerName=grab("Name")||grab("nachname"); const w=text.match(/https?:\/\/\S*withdrawals?\/\S+/i); if(w) widerrufAdminUrl=w[0]; nachricht=grab("Weitere Informationen")||text.slice(0,500); thema="Widerruf "+(relatedOrder||""); }
@@ -746,26 +760,50 @@ function render(){
   catch(e){ app.innerHTML=""; app.appendChild(el('<div class="empty"><div class="e-ico">😵</div><p>Hier ist etwas schiefgelaufen: '+esc(e.message||String(e))+'</p><button class="btn btn-primary" onclick="location.hash=\'#/home\'">Zur Übersicht</button></div>')); }
   renderChrome(r.name);
 }
+function mahnungFaelligCount(now){
+  now=now||Date.now(); let n=0;
+  Object.values(state.orders).forEach(o=>{ if(categorize(o,state.settings,now).primary==="Mahnung fällig") n++; });
+  return n;
+}
 function renderChrome(activeName){
-  // topbar title + mode
+  // topbar title + mode + Sync + Suche
   const titleMap={ home:"Übersicht", bestellungen:"Bestellungen", bestellung:"Bestelldetail", anliegen:"Anliegen-Inbox", chats:"Chat-Verläufe", wissensluecken:"KI-Wissenslücken", dsgvo:"Augenbilder / DSGVO", kalender:"Kalender & Aufgaben", tag:"Tagesplan", import:"Import / Sync", einstellungen:"Einstellungen" };
   document.getElementById("tb-title").textContent=titleMap[activeName]||"Cockpit";
   const mode=document.getElementById("tb-mode"); const live=liveConfigured();
-  mode.textContent=live?"Live":"Import"; mode.classList.toggle("live",live);
+  mode.textContent=state.ui.syncing?"Sync…":(live?"Live":"Import"); mode.classList.toggle("live",live);
+  const sBtn=document.getElementById("tb-search"); if(sBtn) sBtn.onclick=openGlobalSearch;
+  const rBtn=document.getElementById("tb-sync"); if(rBtn){ rBtn.onclick=()=>{ if(liveConfigured()) doLiveSync(); else nav("#/import"); }; rBtn.classList.toggle("spinning",!!state.ui.syncing); }
   // side + bottom nav
   const side=document.getElementById("sidenav"); const bot=document.getElementById("bottomnav");
-  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount() };
+  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount() };
   side.innerHTML=NAV_ITEMS.map(it=>{
     const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const badge=c?'<span class="n-badge">'+c+'</span>':"";
     return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span><span>'+esc(it.label)+'</span>'+badge+'</a>';
   }).join("");
-  const botItems=NAV_ITEMS.filter(it=>["home","bestellungen","anliegen","kalender","import"].includes(it.name));
-  bot.innerHTML=botItems.map(it=>{
+  // Mobil: 4 Primärtabs + „Mehr"-Sheet (Rest inkl. Einstellungen ist damit überall erreichbar)
+  const primary=NAV_ITEMS.filter(it=>["home","bestellungen","anliegen","kalender"].includes(it.name));
+  const moreNames=["chats","wissensluecken","dsgvo","import","einstellungen"];
+  const moreCount=(counts.dsgvo||0)+(counts.wissensluecken||0);
+  bot.innerHTML=primary.map(it=>{
     const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const dot=c?'<span class="n-dot">'+c+'</span>':"";
     return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span>'+dot+esc(it.short)+'</a>';
-  }).join("");
+  }).join("")+
+  '<a href="#" id="nav-more" class="'+(moreNames.includes(activeName)?"active":"")+'"><span class="ico">☰</span>'+(moreCount?'<span class="n-dot">'+moreCount+'</span>':"")+'Mehr</a>';
+  const moreBtn=document.getElementById("nav-more");
+  if(moreBtn) moreBtn.onclick=(e)=>{ e.preventDefault(); openMoreSheet(moreNames,counts); };
+}
+function openMoreSheet(names,counts){
+  const items=NAV_ITEMS.filter(it=>names.includes(it.name));
+  const m=showModal('<h2 style="font-size:15px">Mehr</h2><div id="more-list" style="margin-top:10px"></div><div class="modal-btns"><button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>');
+  const list=m.querySelector("#more-list");
+  items.forEach(it=>{
+    const c=counts[it.name];
+    const row=el('<a href="#/'+it.name+'" style="display:flex;align-items:center;gap:12px;padding:13px 8px;border-bottom:1px solid var(--line);text-decoration:none;font-size:14px"><span style="width:22px;text-align:center">'+navIco(it.name)+'</span><span style="flex:1">'+esc(it.label)+'</span>'+(c?'<span class="badge ink">'+c+'</span>':"")+'</a>');
+    row.onclick=()=>closeModal();
+    list.appendChild(row);
+  });
 }
 function navIco(name){ const m={home:"⌂",bestellungen:"▦",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",import:"⟳",einstellungen:"⚙"}; return m[name]||"•"; }
 
@@ -783,7 +821,7 @@ function viewDashboard(app){
   // freshness
   const fresh=state.importlog.lastLiveAt||state.importlog.lastSnapshotAt;
   const freshTxt = fresh ? ("Datenstand: "+fmtDateTime(fresh)+(liveConfigured()?" · Live":" · Import")) : "Noch keine Daten importiert.";
-  wrap.appendChild(el('<div class="notice"><span class="ni">🕓</span><div>'+esc(freshTxt)+' <a href="#/import" style="text-decoration:underline">aktualisieren</a></div></div>'));
+  wrap.appendChild(el('<div class="notice"><span class="ni">🕓</span><div>'+esc(freshTxt)+' '+(liveConfigured()?'<a href="#" onclick="doLiveSync();return false" style="text-decoration:underline">aktualisieren</a>':'<a href="#/import" style="text-decoration:underline">importieren</a>')+'</div></div>'));
 
   if(totalOrders===0){
     wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Noch keine Bestellungen im Cockpit. Lade einen Daten-Snapshot, importiere eine CSV – oder starte mit Demo-Daten, um alles auszuprobieren.</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="#/import">Daten importieren</a><button class="btn btn-ghost" id="seed">Demo-Daten laden</button></div></div></div>'));
@@ -843,9 +881,6 @@ function viewOrders(app){
   const filterSel=el('<select style="max-width:260px"><option value="">Alle Kategorien</option>'+CATS.map(c=>'<option value="'+esc(c)+'"'+(state.ui.ordersFilter===c?" selected":"")+'>'+esc(c)+' ('+(buckets[c]||[]).length+')</option>').join("")+'</select>');
   ctl.appendChild(filterSel);
   ctl.appendChild(el('<span class="spacer"></span>'));
-  const syncBtn=el('<button class="btn btn-sm '+(liveConfigured()?"btn-primary":"btn-ghost")+'">⟳ '+(liveConfigured()?"Live aktualisieren":"Import")+'</button>');
-  syncBtn.onclick=()=>{ if(liveConfigured()) doLiveSync(); else nav("#/import"); };
-  ctl.appendChild(syncBtn);
   wrap.appendChild(ctl);
 
   seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{ state.ui.ordersView=b.getAttribute("data-v"); state.settings.kanbanMode=(state.ui.ordersView==="kanban"); saveSettings(); render(); });
@@ -1239,8 +1274,12 @@ function viewGaps(app){
       '<div style="font-weight:700;margin-top:8px">'+esc(g.frage)+'</div>'+
       (g.kontext?'<div class="small muted" style="margin-top:4px">'+esc(g.kontext)+'</div>':"")+
       (g.vorgeschlagene_antwort?'<div class="small" style="margin-top:8px;padding:8px;background:var(--surface2)"><b>Vorschlag:</b> '+esc(g.vorgeschlagene_antwort)+'</div>':"");
-    const acts=el('<div class="row" style="margin-top:12px;gap:6px"></div>');
+    const acts=el('<div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap"></div>');
     ["neu","geplant","eingebaut"].forEach(s=>{ const b=el('<button class="btn btn-sm '+(g.status===s?"btn-primary":"btn-ghost")+'">'+s+'</button>'); b.onclick=()=>{ g.status=s; saveGaps(); render(); }; acts.appendChild(b); });
+    if(g.vorgeschlagene_antwort){ const ca=el('<button class="btn btn-sm btn-ghost">Antwort kopieren</button>'); ca.onclick=()=>{ copyText(g.vorgeschlagene_antwort); toast("Antwort kopiert"); }; acts.appendChild(ca); }
+    const kb=el('<button class="btn btn-sm btn-ghost">Für KB kopieren</button>');
+    kb.onclick=()=>{ copyText(JSON.stringify({ id: g.frage.toLowerCase().replace(/[^a-zä-ü0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,50), category: "Chat", question: g.frage, answer: g.vorgeschlagene_antwort||"" }, null, 2)); toast("KB-Eintrag kopiert (faq-kb-Format) — nach Übernahme auf »eingebaut« setzen"); };
+    acts.appendChild(kb);
     acts.appendChild(el('<span class="spacer"></span>'));
     const del=el('<button class="btn btn-sm btn-danger">Löschen</button>'); del.onclick=async()=>{ if(await confirmDialog("Löschen?","Diese Wissenslücke entfernen?","Löschen",true)){ delete state.gaps[g.id]; saveGaps(); render(); } }; acts.appendChild(del);
     it.appendChild(acts);
@@ -1450,11 +1489,43 @@ function viewImport(app){
 
   app.appendChild(wrap);
 }
-async function doLiveSync(){
+async function doLiveSync(opts){
   if(!liveConfigured()){ nav("#/einstellungen"); return; }
-  toast("Synchronisiere…",6000);
-  try{ const r=await liveSyncAll(); toast("Live: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert"); render(); }
-  catch(e){ toast(e.message||"Sync fehlgeschlagen",5000); }
+  if(state.ui.syncing) return;
+  const silent=opts&&opts.silent;
+  state.ui.syncing=true; renderChrome(parseRoute().name);
+  if(!silent) toast("Synchronisiere…",6000);
+  try{ const r=await liveSyncAll(); if(!silent) toast("Live: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert"); }
+  catch(e){ if(!silent) toast(e.message||"Sync fehlgeschlagen",5000); }
+  finally{ state.ui.syncing=false; render(); }
+}
+
+/* ---------- Globale Suche (Bestellungen + Anliegen + Chats) ---------- */
+function openGlobalSearch(){
+  const m=showModal('<h2 style="font-size:15px">Suche</h2><label class="field" style="margin-top:8px"><input type="text" id="gs-in" placeholder="Bestellnr., Name, E-Mail, Thema…" autocomplete="off"></label><div id="gs-res" class="small"></div><div class="modal-btns"><button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>');
+  const inp=m.querySelector("#gs-in"), res=m.querySelector("#gs-res");
+  let t=null;
+  const row=(ico,title,sub,hash)=>{ const r=el('<a href="'+hash+'" style="display:flex;gap:10px;align-items:center;padding:10px 6px;border-bottom:1px solid var(--line);text-decoration:none"><span>'+ico+'</span><span style="flex:1;min-width:0"><b>'+esc(title)+'</b><br><span class="tiny muted">'+esc(sub)+'</span></span></a>'); r.onclick=()=>closeModal(); return r; };
+  const run=async()=>{
+    const q=normStr(inp.value); res.innerHTML="";
+    if(q.length<2) return;
+    const frag=document.createDocumentFragment();
+    Object.values(state.orders).filter(o=>normStr(o.name+" "+o.customerName+" "+o.customerEmail).includes(q)).slice(0,6)
+      .forEach(o=>frag.appendChild(row("▦",o.name+" · "+fmtMoney(o.totalPrice,o.currency),(o.customerName||o.customerEmail||"")+" · "+categorize(o,state.settings,Date.now()).primary,"#/bestellung/"+encodeURIComponent(o.name))));
+    Object.values(state.anliegen).filter(a=>normStr((a.thema||"")+" "+(a.nachricht||"")+" "+(a.customerName||"")+" "+(a.customerEmail||"")+" "+(a.relatedOrder||"")).includes(q)).slice(0,6)
+      .forEach(a=>frag.appendChild(row("✉",a.thema||a.kind,(a.customerName||"")+" · "+a.status,"#/anliegen")));
+    res.appendChild(frag);
+    if(liveConfigured()){
+      try{
+        const r2=await liveFetch("/admin/chats?q="+encodeURIComponent(inp.value.trim())+"&limit=5");
+        (r2.chats||[]).forEach(c=>{ const rr=row("❋","Chat: "+(c.customerName||c.email||"(ohne Name)"),(c.email||"")+" · "+fmtDate(c.updatedAt),"#/chats"); rr.onclick=()=>{ state.ui.chatQuery=inp.value.trim(); state.ui.chatResults=null; closeModal(); nav("#/chats"); }; res.appendChild(rr); });
+      }catch(e){}
+    }
+    if(!res.children.length) res.innerHTML='<p class="muted" style="padding:10px 6px">Keine Treffer.</p>';
+  };
+  inp.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(run,250); });
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ clearTimeout(t); run(); } });
+  inp.focus();
 }
 
 function viewSettings(app){
@@ -1481,6 +1552,12 @@ function viewSettings(app){
   const data=el('<div class="card"></div>'); data.innerHTML='<h2 style="font-size:15px">Daten</h2><p class="muted small" style="margin:6px 0 12px">Backup enthält keine Schlüssel/Token.</p>';
   const expB=el('<button class="btn btn-ghost">Backup exportieren</button>'); expB.onclick=exportBackup; data.appendChild(expB);
   const impB=el('<label class="btn btn-ghost" style="margin-left:8px">Backup importieren<input type="file" accept=".json" style="display:none"></label>'); impB.querySelector("input").onchange=(e)=>importBackup(e.target.files[0]); data.appendChild(impB);
+  const demoB=el('<button class="btn btn-ghost" style="margin-left:8px">Demo-Daten entfernen</button>');
+  demoB.onclick=()=>{ let n=0; ["B2001","B2002","B2003","B2004","B2005","B2006"].forEach(k=>{ if(state.orders[k]){ delete state.orders[k]; n++; } });
+    Object.keys(state.anliegen).forEach(id=>{ const a=state.anliegen[id]; if(/example\.com$/.test(a.customerEmail||"")){ delete state.anliegen[id]; n++; } });
+    Object.keys(state.images).forEach(id=>{ const im=state.images[id]; if(/^B20\d\d$/.test(im.orderName||"")||/demo\d?\.(jpg|png)/.test(im.imageUrl||"")){ delete state.images[id]; n++; } });
+    persist(["orders","anliegen","images"]); toast(n+" Demo-Einträge entfernt"); render(); };
+  data.appendChild(demoB);
   const clrB=el('<button class="btn btn-danger" style="margin-left:8px">Alle Daten löschen</button>'); clrB.onclick=async()=>{ if(await confirmDialog("Alles löschen?","Wirklich ALLE lokalen Cockpit-Daten löschen? Backup vorher exportieren!","Alles löschen",true)){ Object.values(K).forEach(k=>Store.remove(k)); location.reload(); } }; data.appendChild(clrB);
   wrap.appendChild(data);
   // about
@@ -1550,7 +1627,7 @@ function seedDemo(){
     { date:now-3*86400000, kind:"Widerruf", customerName:"Jonas Weber", customerEmail:"jonas.weber@example.com", thema:"Widerruf B2002", nachricht:"Möchte vom Kauf zurücktreten.", relatedOrder:"B2002", widerrufAdminUrl:"https://admin.shopify.com/store/demo/withdrawals/1" }
   ]);
   const derived=deriveImagesFromOrders(); if(derived.length) mergeImages(derived);
-  state.importlog.lastSnapshotAt=now; saveImportlog();
+  // bewusst KEIN lastSnapshotAt — Demo darf den Datenstand nicht fälschen
 }
 
 /* ======================================================================
@@ -1560,6 +1637,10 @@ function boot(){
   try{ loadState(); }catch(e){ console.error(e); }
   window.addEventListener("hashchange",render);
   render();
+  // Auto-Sync beim Öffnen (leise) — nie wieder manuell auf Sync warten
+  if(liveConfigured()) setTimeout(()=>doLiveSync({silent:true}),50);
+  // PWA: Service-Worker (network-first, damit Updates sofort ankommen)
+  try{ if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{}); }catch(e){}
 }
 boot();
 </script>
