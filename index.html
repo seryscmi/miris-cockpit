@@ -1275,6 +1275,48 @@ function viewGdpr(app){
   const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Augenbilder / DSGVO","Kundenfotos & Chats – markieren, löschen, dokumentieren.");
   wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Augenbilder</b> löschst du hier '+(liveConfigured()?'<b>echt aus Cloudinary</b> (Button „🗑 Löschen")':'per Löschliste (im Live-Modus direkt aus Cloudinary)')+'. <b>Chat-Verläufe</b> suchst und löschst du unter <a href="#/chats" style="text-decoration:underline">Chats</a> (nach Name/E-Mail/Datum), <b>Anliegen</b> in der <a href="#/anliegen" style="text-decoration:underline">Anliegen-Inbox</a>. Automatische Löschung: Chats & Augenfotos nach 90 Tagen.</div></div>'));
 
+  // DSGVO-Ein-Klick: kompletter Kunden-Erase (nur Live-Modus)
+  if(liveConfigured()){
+    const dz=el('<div class="card" style="margin-top:12px"></div>');
+    dz.innerHTML='<h2 style="font-size:14px;margin-bottom:6px">🧹 Kunde komplett löschen (DSGVO-Anfrage)</h2>'+
+      '<p class="tiny muted" style="margin-bottom:10px">Löscht in einem Durchgang alles zu einem Kunden. E-Mail und/oder Bestellnummer angeben.</p>'+
+      '<div class="row" style="gap:8px"><input type="text" id="dz-email" placeholder="kunde@mail.de" style="flex:1;min-width:160px"><input type="text" id="dz-order" placeholder="B1027" style="max-width:110px"></div>'+
+      '<div class="row" style="gap:14px;margin-top:10px;flex-wrap:wrap" id="dz-opts">'+
+      '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="photos" checked> Augenfotos</label>'+
+      '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="chats" checked> Chat-Verläufe</label>'+
+      '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="anliegen" checked> Anliegen</label>'+
+      '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="klaviyo"> Klaviyo-Profil</label>'+
+      '</div>';
+    const goRow=el('<div class="row" style="margin-top:12px"></div>');
+    const go=el('<button class="btn btn-danger">Alles löschen…</button>');
+    go.onclick=async()=>{
+      const email=dz.querySelector("#dz-email").value.trim();
+      const orderName=dz.querySelector("#dz-order").value.trim();
+      if(!email&&!orderName){ toast("E-Mail oder Bestellnummer angeben"); return; }
+      const options={}; dz.querySelectorAll("#dz-opts input").forEach(c=>options[c.getAttribute("data-k")]=c.checked);
+      const parts=Object.keys(options).filter(k=>options[k]).join(", ");
+      if(!await confirmDialog("DSGVO-Löschung ausführen?","Endgültig löschen für "+(email||orderName)+":\n"+parts+"\n\nDas kann NICHT rückgängig gemacht werden.","Endgültig löschen",true)) return;
+      go.disabled=true; go.innerHTML='<span class="spin"></span> Lösche…';
+      try{
+        const res=await liveFetch("/admin/dsgvo/erase",{method:"POST",body:JSON.stringify({email:email||undefined,orderName:orderName||undefined,options})});
+        const r=res.report||{};
+        const lines=[];
+        if(r.photos) lines.push(r.photos.ok?("Augenfotos: "+r.photos.deleted+"/"+r.photos.found+" gelöscht"):("Augenfotos: FEHLER – "+r.photos.error));
+        if(r.chats) lines.push(r.chats.ok?("Chats: "+r.chats.deleted+" gelöscht"):("Chats: FEHLER – "+r.chats.error));
+        if(r.anliegen) lines.push(r.anliegen.ok?("Anliegen: "+r.anliegen.deleted+" gelöscht"):("Anliegen: FEHLER – "+r.anliegen.error));
+        if(r.snapshots) lines.push(r.snapshots.ok?("Bestell-Cache: "+r.snapshots.scrubbed+" bereinigt"):("Cache: FEHLER"));
+        if(r.klaviyo) lines.push(r.klaviyo.ok?"Klaviyo-Profil: Löschung beantragt":("Klaviyo: FEHLER – "+r.klaviyo.error));
+        showModal('<h2>DSGVO-Löschung ausgeführt</h2><div class="small" style="line-height:1.8">'+lines.map(l=>esc(l)).join("<br>")+'</div><div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>');
+        go.disabled=false; go.textContent="Alles löschen…";
+        try{ await liveSyncAll(); }catch(e){}
+      }catch(e){ go.disabled=false; go.textContent="Alles löschen…"; toast(e.message,5000); }
+    };
+    goRow.appendChild(go);
+    dz.appendChild(goRow);
+    dz.appendChild(el('<p class="tiny muted" style="margin-top:8px">„Klaviyo-Profil" braucht einen API-Key mit Data-Privacy-Recht. Jede Löschung wird protokolliert (Nachweis).</p>'));
+    wrap.appendChild(dz);
+  }
+
   const imgs=Object.values(state.images);
   if(!imgs.length){ wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Keine Augenbilder erfasst. Bilder werden automatisch aus deinen Bestellungen (Line-Item "Auge N Bild") abgeleitet, sobald du Bestellungen importierst.</p></div></div>')); app.appendChild(wrap); return; }
 
