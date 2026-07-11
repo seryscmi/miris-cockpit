@@ -987,7 +987,7 @@ function viewOrderDetail(app,name){
       pb.onclick=async()=>{ if(await confirmDialog("Zahlung bestätigen?","Bestellung "+o.name+" in Shopify als BEZAHLT markieren?","Als bezahlt markieren")) runAction(pb,"Als bezahlt markiert","/mark-paid"); };
       row.appendChild(pb);
       const mb=el('<button class="btn btn-sm">⚠️ Mahnung senden</button>');
-      mb.onclick=async()=>{ if(await confirmDialog("Mahnung senden?","Setzt das Tag MAHNUNG – deine bestehende Automation verschickt die Mahnungs-E-Mail.","Mahnung senden")) runAction(mb,"Mahnung ausgelöst","/mahnung",null,()=>{ o.local.mahnungSentAt=Date.now(); saveOrders(); }); };
+      mb.onclick=async()=>{ if(await confirmDialog("Mahnung senden?","Schickt die LETZTE Mahnung an den Kunden: 14-Tage-Frist, danach Inkasso-Übergabe (Kosten trägt der Kunde). Nur nutzen, wenn die automatischen Zahlungserinnerungen erfolglos blieben.","Mahnung senden",true)) runAction(mb,"Mahnung gesendet","/mahnung",null,()=>{ o.local.mahnungSentAt=Date.now(); saveOrders(); }); };
       row.appendChild(mb);
     }
     if(ful!=="fulfilled"){
