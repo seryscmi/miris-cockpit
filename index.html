@@ -932,6 +932,48 @@ function viewOrderDetail(app,name){
     wrap.appendChild(pc);
   }
 
+  // Echte Bestell-Aktionen (Shopify), nur im Live-Modus
+  if(liveConfigured()){
+    const ac=el('<div class="card"></div>');
+    ac.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Aktionen</h2>';
+    const row=el('<div class="row" style="gap:8px"></div>');
+    const fin=normStr(o.financialStatus), ful=normStr(o.fulfillmentStatus);
+    const unpaid=["pending","authorized","partially_paid"].includes(fin);
+    const busy=(btn,label)=>{ btn.disabled=true; btn.innerHTML='<span class="spin"></span> '+label; };
+    const runAction=async(btn,label,path,body,onOk)=>{
+      const orig=btn.textContent; busy(btn,label);
+      try{ const res=await liveFetch("/admin/orders/"+encodeURIComponent(o.name)+path,{method:"POST",body:JSON.stringify(body||{})});
+        if(onOk) onOk(res);
+        toast(label+" ✓"); try{ await liveSyncAll(); }catch(e){} render();
+      }catch(e){ btn.disabled=false; btn.textContent=orig; toast(e.message,5000); }
+    };
+    if(unpaid){
+      const pb=el('<button class="btn btn-sm btn-primary">💶 Als bezahlt markieren</button>');
+      pb.onclick=async()=>{ if(await confirmDialog("Zahlung bestätigen?","Bestellung "+o.name+" in Shopify als BEZAHLT markieren?","Als bezahlt markieren")) runAction(pb,"Als bezahlt markiert","/mark-paid"); };
+      row.appendChild(pb);
+      const mb=el('<button class="btn btn-sm">⚠️ Mahnung senden</button>');
+      mb.onclick=async()=>{ if(await confirmDialog("Mahnung senden?","Setzt das Tag MAHNUNG – deine bestehende Automation verschickt die Mahnungs-E-Mail.","Mahnung senden")) runAction(mb,"Mahnung ausgelöst","/mahnung",null,()=>{ o.local.mahnungSentAt=Date.now(); saveOrders(); }); };
+      row.appendChild(mb);
+    }
+    if(ful!=="fulfilled"){
+      const fb=el('<button class="btn btn-sm btn-primary">📦 Versendet + Tracking</button>');
+      fb.onclick=()=>openFulfillModal(o);
+      row.appendChild(fb);
+    }
+    if((o.miris||{}).approval_url){
+      const vb=el('<button class="btn btn-sm">🎨 Vorschau-Mail erneut</button>');
+      vb.onclick=async()=>{ if(await confirmDialog("Vorschau-Mail erneut senden?","Kunde bekommt die Farbvorschau-E-Mail erneut, mit frischer 24h-Frist.","Erneut senden")) runAction(vb,"Vorschau-Mail gesendet","/resend-preview",null,()=>{ o.local.previewSentAt=Date.now(); saveOrders(); }); };
+      row.appendChild(vb);
+    }
+    row.appendChild(el('<span class="spacer"></span>'));
+    const cb=el('<button class="btn btn-sm btn-danger">Stornieren</button>');
+    cb.onclick=async()=>{ if(await confirmDialog("Bestellung stornieren?",o.name+" wird in Shopify STORNIERT (mit Erstattung falls bezahlt, Bestand zurückgebucht, Kunde wird benachrichtigt). Das kann nicht rückgängig gemacht werden.","Stornieren",true)) runAction(cb,"Storniert","/cancel",{refund:true,restock:true,notify:true}); };
+    row.appendChild(cb);
+    ac.appendChild(row);
+    ac.appendChild(el('<p class="tiny muted" style="margin-top:10px">Aktionen wirken direkt in Shopify. Versand-Mail an den Kunden kommt von Shopify, Mahnung/Vorschau über deine Klaviyo-Flows.</p>'));
+    wrap.appendChild(ac);
+  }
+
   // Workflow-Toggles
   const wf=el('<div class="card"></div>'); wf.innerHTML='<h2 style="font-size:14px;margin-bottom:6px">Arbeitsschritte (lokal)</h2>';
   wf.appendChild(toggleRow("Farbvorschau gesendet",!!o.local.previewSentAt,(on)=>{ o.local.previewSentAt=on?Date.now():null; saveOrders(); render(); }));
@@ -953,6 +995,29 @@ function viewOrderDetail(app,name){
   wrap.appendChild(nc);
 
   app.appendChild(wrap);
+}
+function openFulfillModal(o){
+  const m=showModal(
+    '<h2>Versendet markieren – '+esc(o.name)+'</h2>'+
+    '<p class="tiny muted">Shopify markiert die Bestellung als versendet und schickt dem Kunden automatisch die Versand-E-Mail (mit Tracking, falls angegeben).</p>'+
+    '<label class="field" style="margin-top:12px"><span>Sendungsnummer (optional)</span><input type="text" id="ff-nr" placeholder="z. B. 00340434…"></label>'+
+    '<label class="field"><span>Versanddienst</span><select id="ff-co"><option>DHL</option><option>Deutsche Post</option><option>Hermes</option><option>DPD</option><option>GLS</option><option>UPS</option><option value="Other">Sonstiger</option></select></label>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="go">Versendet markieren 📦</button></div>',
+    {sticky:true}
+  );
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  const go=m.querySelector('[data-x=go]');
+  go.onclick=async()=>{
+    const nr=m.querySelector("#ff-nr").value.trim();
+    const co=m.querySelector("#ff-co").value;
+    go.disabled=true; go.innerHTML='<span class="spin"></span> Markiere…';
+    try{
+      await liveFetch("/admin/orders/"+encodeURIComponent(o.name)+"/fulfill",{method:"POST",body:JSON.stringify(nr?{trackingNumber:nr,trackingCompany:co}:{})});
+      o.local.shippedMarkedAt=Date.now(); saveOrders();
+      closeModal(); toast("Versendet markiert ✓ – Kunde wird benachrichtigt");
+      try{ await liveSyncAll(); }catch(e){} render();
+    }catch(e){ go.disabled=false; go.textContent="Versendet markieren 📦"; toast(e.message,5000); }
+  };
 }
 function kv(k,v){ return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
 function toggleRow(label,on,cb){ const row=el('<div class="toggle-row"><span class="t-l">'+esc(label)+'</span></div>'); const sw=el('<label class="switch"><input type="checkbox" '+(on?"checked":"")+'><span class="sl"></span></label>'); sw.querySelector("input").onchange=(e)=>cb(e.target.checked); row.appendChild(sw); return row; }
