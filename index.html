@@ -15,7 +15,7 @@
 <style>
 :root{
   --ink:#1c1c1c; --ink2:#5a5a5a; --paper:#efefef; --surface:#ffffff; --surface2:#e6e6e6;
-  --line:#d4d4d4; --line2:#c2c2c2;
+  --line:#e4e4e4; --line2:#d6d6d6;
   --accent:#1c1c1c;
   --warn:#b8860b; --warn-bg:#f6edd4;
   --danger:#a33131; --danger-bg:#f3dede;
@@ -36,7 +36,8 @@ body{
 body.no-scroll{overflow:hidden}
 button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
 a{color:inherit}
-h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:1.2}
+h1{font-family:var(--serif);font-weight:600;letter-spacing:.1em;text-transform:uppercase;line-height:1.2}
+h2,h3{font-family:var(--sans);font-weight:800;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2);line-height:1.3}
 .serif{font-family:var(--serif)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 
@@ -49,11 +50,14 @@ h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.06em;text-tran
 }
 #topbar .brand{font-family:var(--serif);font-weight:700;letter-spacing:.22em;text-transform:uppercase;font-size:16px}
 #topbar .tb-title{font-family:var(--serif);letter-spacing:.14em;text-transform:uppercase;font-size:13px;color:var(--ink2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#topbar .tb-icon{background:none;border:1px solid var(--line2);color:var(--ink);width:34px;height:34px;font-size:17px;line-height:1;cursor:pointer;padding:0}
-#topbar .tb-icon:hover{background:var(--surface)}
+#topbar .tb-icon{background:none;border:none;color:var(--ink);width:38px;height:38px;font-size:18px;line-height:1;cursor:pointer;padding:0;transition:background .15s}
+#topbar .tb-icon:hover{background:rgba(28,28,28,.06)}
+#topbar .tb-icon:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #topbar .tb-icon.spinning{animation:sp 1s linear infinite}
-#topbar .tb-mode{font-size:10px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);padding:3px 7px;color:var(--ink2)}
-#topbar .tb-mode.live{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#topbar .tb-mode{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+#topbar .tb-mode::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--line2)}
+#topbar .tb-mode.live{color:var(--ink)}
+#topbar .tb-mode.live::before{background:var(--ok)}
 
 .wrap{display:flex;min-height:calc(100dvh - var(--topbar-h))}
 #sidenav{display:none}
@@ -68,7 +72,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.06em;text-tran
     font-size:13px;letter-spacing:.04em;color:var(--ink2);border:1px solid transparent;
   }
   #sidenav a .ico{width:18px;text-align:center}
-  #sidenav a.active{background:var(--surface);color:var(--ink);border-color:var(--line);font-weight:700}
+  #sidenav a.active{background:var(--surface);color:var(--ink);font-weight:700}
   #sidenav a .n-badge{margin-left:auto;background:var(--ink);color:var(--paper);font-size:10px;padding:1px 6px;min-width:18px;text-align:center}
   #bottomnav{display:none !important}
 }
@@ -91,40 +95,43 @@ h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.06em;text-tran
 #bottomnav a .n-dot{position:absolute;top:8px;right:calc(50% - 18px);background:var(--danger);color:#fff;font-size:9px;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
 
 /* ---------- Components ---------- */
-.page-head{margin-bottom:16px}
-.page-head h1{font-size:22px;margin-bottom:4px}
+.page-head{margin:10px 0 22px}
+.page-head h1{font-size:19px;margin-bottom:5px}
 .page-head p{color:var(--ink2);font-size:13px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .spacer{flex:1}
-.card{background:var(--surface);border:1px solid var(--line);padding:16px}
-.card + .card{margin-top:12px}
+.card{background:var(--surface);padding:20px}
+.card + .card{margin-top:14px}
 .muted{color:var(--ink2)}
 .small{font-size:12px}
 .tiny{font-size:11px;letter-spacing:.04em}
 
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  border:1px solid var(--ink);background:var(--surface);color:var(--ink);
-  padding:10px 15px;cursor:pointer;font-size:13px;letter-spacing:.04em;
-  min-height:42px;text-decoration:none;transition:background .12s,color .12s;
+  border:none;background:none;color:var(--ink);font-weight:700;
+  padding:10px 14px;cursor:pointer;font-size:13px;letter-spacing:.02em;
+  min-height:42px;text-decoration:none;
+  transition:background .16s cubic-bezier(.22,1,.36,1),color .16s cubic-bezier(.22,1,.36,1);
 }
-.btn:hover{background:var(--surface2)}
+.btn:hover{background:rgba(28,28,28,.06)}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .btn-primary{background:var(--ink);color:var(--paper)}
 .btn-primary:hover{background:#000}
-.btn-ghost{border-color:var(--line2);color:var(--ink2)}
-.btn-ghost:hover{background:var(--surface2);color:var(--ink)}
-.btn-danger{border-color:var(--danger);color:var(--danger)}
+.btn-ghost{color:var(--ink2);font-weight:600}
+.btn-ghost:hover{color:var(--ink);background:rgba(28,28,28,.05)}
+.btn-danger{color:var(--danger)}
 .btn-danger:hover{background:var(--danger);color:#fff}
-.btn-sm{min-height:34px;padding:6px 11px;font-size:12px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{min-height:36px;padding:7px 11px;font-size:12.5px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-block{width:100%}
 
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;letter-spacing:.03em;padding:2px 8px;border:1px solid var(--line2);background:var(--muted-bg);color:var(--muted);white-space:nowrap}
-.badge.warn{background:var(--warn-bg);color:var(--warn);border-color:#e2cf9a}
-.badge.danger{background:var(--danger-bg);color:var(--danger);border-color:#e0b6b6}
-.badge.ok{background:var(--ok-bg);color:var(--ok);border-color:#b3d3bd}
-.badge.info{background:var(--info-bg);color:var(--info);border-color:#b8cad9}
-.badge.ink{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;letter-spacing:.02em;color:var(--ink2);white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--muted);flex:0 0 6px}
+.badge.warn::before{background:var(--warn)}
+.badge.danger{color:var(--danger)} .badge.danger::before{background:var(--danger)}
+.badge.ok::before{background:var(--ok)}
+.badge.info::before{background:var(--info)}
+.badge.ink{background:var(--ink);color:var(--paper);padding:2px 8px} .badge.ink::before{display:none}
 
 label.field{display:block;margin-bottom:12px}
 label.field > span{display:block;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);margin-bottom:5px}
@@ -144,25 +151,25 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 
 /* Heute: Stat-Chips + Aktions-Warteschlange */
 .stat-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
-.stat-chip{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;min-width:104px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);text-decoration:none;transition:border-color .18s cubic-bezier(.22,1,.36,1)}
-.stat-chip:hover{border-color:var(--ink)}
-.stat-chip .sc-v{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.stat-chip{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;min-width:106px;padding:14px 16px;background:var(--surface);text-decoration:none;transition:box-shadow .18s cubic-bezier(.22,1,.36,1)}
+.stat-chip:hover{box-shadow:0 2px 10px rgba(28,28,28,.09)}
+.stat-chip .sc-v{font-size:20px;font-weight:800;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
 .stat-chip .sc-l{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
 .q-card{padding:0;margin-top:12px}
-.q-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
-.q-head h2{font-size:13px;letter-spacing:.1em;margin:0;flex:1}
-.q-count{font-family:var(--sans);font-size:12px;font-weight:800;background:var(--ink);color:var(--paper);padding:2px 9px}
-.q-row{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line)}
-.q-row:last-child{border-bottom:none}
+.q-head{display:flex;align-items:center;gap:10px;padding:14px 20px 10px}
+.q-head h2{margin:0;flex:1}
+.q-count{font-family:var(--sans);font-size:12px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.q-row{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--line)}
+
 .q-row .q-main{flex:1;min-width:0;text-decoration:none;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (prefers-reduced-motion: reduce){ .stat-chip{transition:none} .spin{animation:none} }
 
 /* Filter-Chips (Bestellungen) */
 .chip-row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;margin-bottom:6px}
-.f-chip{flex:0 0 auto;background:var(--surface);border:1px solid var(--line2);padding:7px 12px;font-size:12px;cursor:pointer;white-space:nowrap;color:var(--ink2);transition:all .15s cubic-bezier(.22,1,.36,1)}
+.f-chip{flex:0 0 auto;background:var(--surface);border:none;padding:9px 13px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;color:var(--ink2);transition:all .15s cubic-bezier(.22,1,.36,1)}
 .f-chip b{color:inherit;font-weight:800;margin-left:2px}
 .f-chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-.f-chip.hot:not(.on){border-color:var(--danger);color:var(--danger)}
+.f-chip.hot:not(.on){color:var(--danger)}
 @media (prefers-reduced-motion: reduce){ .f-chip{transition:none} }
 
 /* Category chips row */
@@ -176,13 +183,13 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 
 /* Kanban board */
 .board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
-.col{flex:0 0 270px;scroll-snap-align:start;background:var(--surface2);border:1px solid var(--line);display:flex;flex-direction:column;max-height:calc(100dvh - 220px)}
-.col-h{padding:10px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface2);display:flex;align-items:center;gap:8px}
-.col-h .c-t{font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:700}
-.col-h .c-c{margin-left:auto;font-size:11px;background:var(--ink);color:var(--paper);padding:1px 7px}
+.col{flex:0 0 272px;scroll-snap-align:start;background:rgba(28,28,28,.035);display:flex;flex-direction:column;max-height:calc(100dvh - 220px)}
+.col-h{padding:12px 14px 8px;position:sticky;top:0;background:transparent;display:flex;align-items:center;gap:8px}
+.col-h .c-t{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:var(--ink2)}
+.col-h .c-c{margin-left:auto;font-size:11px;font-weight:800;color:var(--ink)}
 .col-body{padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
-.ocard{background:var(--surface);border:1px solid var(--line);padding:10px;cursor:pointer}
-.ocard:hover{border-color:var(--ink)}
+.ocard{background:var(--surface);padding:12px;cursor:pointer;transition:transform .16s cubic-bezier(.22,1,.36,1),box-shadow .16s}
+.ocard:hover{box-shadow:0 2px 10px rgba(28,28,28,.09)}
 .ocard .o-top{display:flex;align-items:baseline;gap:8px}
 .ocard .o-name{font-family:var(--serif);font-weight:700;letter-spacing:.04em}
 .ocard .o-total{margin-left:auto;font-weight:700}
@@ -191,8 +198,8 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .ocard .o-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
 
 /* list view */
-.list-item{background:var(--surface);border:1px solid var(--line);padding:12px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
-.list-item:hover{border-color:var(--ink)}
+.list-item{background:var(--surface);padding:14px 16px;display:flex;gap:12px;align-items:flex-start;cursor:pointer;transition:box-shadow .16s}
+.list-item:hover{box-shadow:0 2px 10px rgba(28,28,28,.09)}
 .list-item + .list-item{margin-top:8px}
 
 /* toggles */
@@ -217,7 +224,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .empty p{margin-bottom:16px;max-width:420px;margin-left:auto;margin-right:auto}
 
 .divider{height:1px;background:var(--line);margin:16px 0}
-.kv{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .kv .k{width:130px;flex:0 0 130px;color:var(--ink2);font-size:12px;letter-spacing:.03em}
 .kv .v{flex:1;word-break:break-word}
 .thumb{width:64px;height:64px;object-fit:cover;border:1px solid var(--line2);background:var(--surface2)}
@@ -236,10 +243,14 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .cal .cell .cdot .open{background:var(--warn)}
 
 /* modal + toast */
-#modal-root{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(20,20,20,.45)}
+#modal-root{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;padding:0;background:rgba(20,20,20,.45)}
 #modal-root.open{display:flex}
-.modal{background:var(--surface);border:1px solid var(--ink);max-width:560px;width:100%;max-height:88dvh;overflow-y:auto;padding:22px}
-.modal h2{font-size:18px;margin-bottom:12px}
+.modal{background:var(--surface);max-width:100%;width:100%;max-height:92dvh;overflow-y:auto;padding:24px 20px calc(20px + env(safe-area-inset-bottom))}
+.modal h2{font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);margin-bottom:12px}
+@media(min-width:640px){
+  #modal-root{align-items:center;padding:20px}
+  .modal{max-width:560px;padding:26px 26px 22px}
+}
 .modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 #toast-root{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 14px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding:0 16px}
 @media(min-width:860px){#toast-root{bottom:20px}}
@@ -313,14 +324,14 @@ const CATS = [
   "Versendet","Erledigt"
 ];
 const CAT_META = {
-  "Zahlung offen":{k:"warn",ico:"⏳"},
-  "Mahnung fällig":{k:"danger",ico:"⚠️"},
-  "Reparatur":{k:"info",ico:"🔧"},
-  "Farbvorschau offen":{k:"warn",ico:"🎨"},
-  "Vorschau gesendet – wartet auf Freigabe":{k:"info",ico:"📤"},
-  "Freigegeben – muss versendet werden":{k:"ok",ico:"📦"},
-  "Versendet":{k:"muted",ico:"✅"},
-  "Erledigt":{k:"muted",ico:"🗄️"}
+  "Zahlung offen":{k:"warn",ico:""},
+  "Mahnung fällig":{k:"danger",ico:""},
+  "Reparatur":{k:"info",ico:""},
+  "Farbvorschau offen":{k:"warn",ico:""},
+  "Vorschau gesendet – wartet auf Freigabe":{k:"info",ico:""},
+  "Freigegeben – muss versendet werden":{k:"ok",ico:""},
+  "Versendet":{k:"muted",ico:""},
+  "Erledigt":{k:"muted",ico:""}
 };
 const ANLIEGEN_KINDS = ["Chat-Nachricht","Feedback","Adressänderung","Widerruf","DSGVO","Reparatur","Sonstiges"];
 const ANLIEGEN_STATI = ["neu","in Arbeit","beantwortet","erledigt"];
@@ -786,7 +797,7 @@ function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
   const r=parseRoute(); const fn=views[r.name]||viewDashboard;
   try{ fn(app,r.arg); }
-  catch(e){ app.innerHTML=""; app.appendChild(el('<div class="empty"><div class="e-ico">😵</div><p>Hier ist etwas schiefgelaufen: '+esc(e.message||String(e))+'</p><button class="btn btn-primary" onclick="location.hash=\'#/home\'">Zur Übersicht</button></div>')); }
+  catch(e){ app.innerHTML=""; app.appendChild(el('<div class="empty"><div class="e-ico">×</div><p>Hier ist etwas schiefgelaufen: '+esc(e.message||String(e))+'</p><button class="btn btn-primary" onclick="location.hash=\'#/home\'">Zur Übersicht</button></div>')); }
   renderChrome(r.name);
 }
 function mahnungFaelligCount(now){
@@ -851,7 +862,7 @@ function viewDashboard(app){
 
   if(totalOrders===0){
     wrap.innerHTML=pageHead("Heute","");
-    wrap.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◉</div><p>Noch keine Daten. Verbinde das Backend oder importiere einen Snapshot.</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="#/einstellungen">Einrichten</a><button class="btn btn-ghost" id="seed">Demo laden</button></div></div></div>'));
+    wrap.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◉</div><p>Noch keine Daten.</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="#/einstellungen">Einrichten</a><button class="btn btn-ghost" id="seed">Demo laden</button></div></div></div>'));
     app.appendChild(wrap); wrap.querySelector("#seed").onclick=()=>{ seedDemo(); toast("Demo-Daten geladen"); render(); };
     return;
   }
@@ -876,7 +887,7 @@ function viewDashboard(app){
 
   const mahn=buckets["Mahnung fällig"]||[];
   if(mahn.length){ queued++;
-    const c=queueCard("⚠️","Mahnung fällig",mahn.length);
+    const c=queueCard("","Mahnung fällig",mahn.length);
     mahn.slice(0,5).forEach(o=>{
       const row=el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+' · '+esc(fmtMoney(o.totalPrice,o.currency))+'</span></a></div>');
       if(liveConfigured()){
@@ -894,28 +905,28 @@ function viewDashboard(app){
 
   const vor=buckets["Farbvorschau offen"]||[];
   if(vor.length){ queued++;
-    const c=queueCard("🎨","Farbvorschau senden",vor.length);
+    const c=queueCard("","Farbvorschau senden",vor.length);
     vor.slice(0,5).forEach(o=>c.appendChild(el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+'</span></a><span class="badge warn">offen</span></div>')));
     q.appendChild(c);
   }
 
   const frei=buckets["Freigegeben – muss versendet werden"]||[];
   if(frei.length){ queued++;
-    const c=queueCard("📦","Versandbereit",frei.length);
+    const c=queueCard("","Versandbereit",frei.length);
     frei.slice(0,5).forEach(o=>c.appendChild(el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+'</span></a><span class="badge ok">freigegeben</span></div>')));
     q.appendChild(c);
   }
 
   const neueAnliegen=Object.values(state.anliegen).filter(a=>a.status==="neu").sort((a,b)=>b.date-a.date);
   if(neueAnliegen.length){ queued++;
-    const c=queueCard("✉","Neue Anliegen",neueAnliegen.length);
+    const c=queueCard("","Neue Anliegen",neueAnliegen.length);
     neueAnliegen.slice(0,5).forEach(a=>c.appendChild(el('<div class="q-row"><a href="#/anliegen" class="q-main"><b>'+esc(a.thema||a.kind)+'</b> <span class="muted">'+esc(a.customerName||"")+'</span></a><span class="badge">'+esc(a.kind)+'</span></div>')));
     q.appendChild(c);
   }
 
   const tasks=todaysTasks();
   if(tasks.length){ queued++;
-    const c=queueCard("▤","Aufgaben",tasks.filter(t=>!t.done).length+"/"+tasks.length);
+    const c=queueCard("","Aufgaben",tasks.filter(t=>!t.done).length+"/"+tasks.length);
     tasks.forEach(t=>{
       const row=el('<div class="q-row"><span class="q-main">'+(t.done?'<s class="muted">':"")+esc(t.text)+(t.done?"</s>":"")+'</span></div>');
       const sw=el('<label class="switch"><input type="checkbox" '+(t.done?"checked":"")+'><span class="sl"></span></label>');
@@ -934,7 +945,7 @@ function statChip(val,label,href){
 }
 function queueCard(ico,title,count){
   const c=el('<div class="card q-card"></div>');
-  c.innerHTML='<div class="q-head"><span>'+ico+'</span><h2>'+esc(title)+'</h2><span class="q-count">'+esc(String(count))+'</span></div>';
+  c.innerHTML='<div class="q-head">'+(ico?'<span>'+ico+'</span>':'')+'<h2>'+esc(title)+'</h2><span class="q-count">'+esc(String(count))+'</span></div>';
   return c;
 }
 function kpi(label,val,sub){ return '<div class="kpi"><div class="k-label">'+esc(label)+'</div><div class="k-val">'+esc(val)+'</div><div class="k-sub">'+esc(sub||"")+'</div></div>'; }
@@ -972,7 +983,7 @@ function viewOrders(app){
   if(state.ui.ordersView==="kanban" && !state.ui.ordersFilter && !q){
     const board=el('<div class="board"></div>');
     CATS.forEach(cat=>{ const list=buckets[cat]||[]; const meta=CAT_META[cat]||{};
-      const col=el('<div class="col"><div class="col-h"><span>'+esc(meta.ico||"")+'</span><span class="c-t">'+esc(cat)+'</span><span class="c-c">'+list.length+'</span></div><div class="col-body"></div></div>');
+      const col=el('<div class="col"><div class="col-h"><span class="c-t">'+esc(cat)+'</span><span class="c-c">'+list.length+'</span></div><div class="col-body"></div></div>');
       const body=col.querySelector(".col-body");
       if(!list.length) body.appendChild(el('<p class="muted tiny" style="padding:6px">—</p>'));
       list.sort((a,b)=>a.createdAt-b.createdAt).forEach(o=>body.appendChild(orderCard(o,now)));
@@ -987,7 +998,7 @@ function viewOrders(app){
     if(!list.length) box.appendChild(el('<p class="muted">Keine Treffer.</p>'));
     list.forEach(o=>{ const {primary,badges}=categorize(o,state.settings,now); const meta=CAT_META[primary]||{};
       const it=el('<div class="list-item"></div>');
-      it.innerHTML='<div style="flex:1;min-width:0"><div class="o-top"><span class="o-name">'+esc(o.name)+'</span> <span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span></div><div class="o-cust">'+esc(o.customerName||o.customerEmail||"—")+'</div><div class="o-badges">'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div><div style="text-align:right"><div class="o-total">'+esc(fmtMoney(o.totalPrice,o.currency))+'</div><div class="tiny muted">'+esc(fmtDate(o.createdAt))+'</div></div>';
+      it.innerHTML='<div style="flex:1;min-width:0"><div class="o-top"><span class="o-name">'+esc(o.name)+'</span> <span class="badge '+(meta.k||"muted")+'">'+esc(primary)+'</span></div><div class="o-cust">'+esc(o.customerName||o.customerEmail||"—")+'</div><div class="o-badges">'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div><div style="text-align:right"><div class="o-total">'+esc(fmtMoney(o.totalPrice,o.currency))+'</div><div class="tiny muted">'+esc(fmtDate(o.createdAt))+'</div></div>';
       it.onclick=()=>nav("#/bestellung/"+encodeURIComponent(o.name));
       box.appendChild(it);
     });
@@ -1020,7 +1031,7 @@ function viewOrderDetail(app,name){
   const wrap=el('<div></div>');
   wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/bestellungen">‹ Zurück</a></div><h1 style="margin-top:10px">'+esc(o.name)+'</h1>'+
     '<p style="margin-top:4px">'+kundeLink(o.customerEmail,o.customerName)+' · '+esc(fmtMoney(o.totalPrice,o.currency))+' · '+esc(fmtDate(o.createdAt))+'</p>'+
-    '<div class="row" style="margin-top:6px"><span class="badge '+(meta.k||"muted")+'">'+esc(meta.ico||"")+' '+esc(primary)+'</span>'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div>';
+    '<div class="row" style="margin-top:6px"><span class="badge '+(meta.k||"muted")+'">'+esc(primary)+'</span>'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div>';
 
   // Stammdaten
   const info=el('<div class="card"></div>');
@@ -1062,29 +1073,29 @@ function viewOrderDetail(app,name){
       }catch(e){ btn.disabled=false; btn.textContent=orig; toast(e.message,5000); }
     };
     if(unpaid){
-      const pb=el('<button class="btn btn-sm btn-primary">💶 Als bezahlt markieren</button>');
+      const pb=el('<button class="btn btn-sm btn-primary">Bezahlt</button>');
       pb.onclick=async()=>{ if(await confirmDialog("Zahlung bestätigen?","Bestellung "+o.name+" in Shopify als BEZAHLT markieren?","Als bezahlt markieren")) runAction(pb,"Als bezahlt markiert","/mark-paid"); };
       row.appendChild(pb);
-      const mb=el('<button class="btn btn-sm">⚠️ Mahnung senden</button>');
+      const mb=el('<button class="btn btn-sm btn-danger">Mahnung</button>');
       mb.onclick=async()=>{ if(await confirmDialog("Mahnung senden?","Schickt die LETZTE Mahnung an den Kunden: 14-Tage-Frist, danach Inkasso-Übergabe (Kosten trägt der Kunde). Nur nutzen, wenn die automatischen Zahlungserinnerungen erfolglos blieben.","Mahnung senden",true)) runAction(mb,"Mahnung gesendet","/mahnung",null,()=>{ o.local.mahnungSentAt=Date.now(); saveOrders(); }); };
       row.appendChild(mb);
     }
     if(ful!=="fulfilled"){
-      const fb=el('<button class="btn btn-sm btn-primary">📦 Versendet + Tracking</button>');
+      const fb=el('<button class="btn btn-sm btn-primary">Versenden</button>');
       fb.onclick=()=>openFulfillModal(o);
       row.appendChild(fb);
     }
     if((o.miris||{}).approval_url){
-      const vb=el('<button class="btn btn-sm">🎨 Vorschau erneut</button>');
+      const vb=el('<button class="btn btn-sm btn-ghost">Vorschau erneut</button>');
       vb.onclick=async()=>{ if(await confirmDialog("Vorschau-Mail erneut senden?","Kunde bekommt die Farbvorschau-E-Mail erneut, mit frischer 24h-Frist.","Erneut senden")) runAction(vb,"Vorschau-Mail gesendet","/resend-preview",null,()=>{ o.local.previewSentAt=Date.now(); saveOrders(); }); };
       row.appendChild(vb);
     } else if(ful!=="fulfilled" && !unpaid){
-      const vb=el('<button class="btn btn-sm btn-primary">🎨 Vorschau senden</button>');
+      const vb=el('<button class="btn btn-sm btn-primary">Vorschau senden</button>');
       vb.onclick=()=>openPreviewUpload(o);
       row.appendChild(vb);
     }
     if(o.customerEmail){
-      const eb=el('<button class="btn btn-sm">✉ E-Mail</button>');
+      const eb=el('<button class="btn btn-sm btn-ghost">E-Mail</button>');
       eb.onclick=()=>openMailModal({email:o.customerEmail, firstName:(o.customerName||"").split(" ")[0], orderName:o.name});
       row.appendChild(eb);
     }
@@ -1137,10 +1148,10 @@ function viewOrderDetail(app,name){
 function openFulfillModal(o){
   const m=showModal(
     '<h2>Versendet markieren – '+esc(o.name)+'</h2>'+
-    '<p class="tiny muted">Shopify markiert die Bestellung als versendet und schickt dem Kunden automatisch die Versand-E-Mail (mit Tracking, falls angegeben).</p>'+
+    
     '<label class="field" style="margin-top:12px"><span>Sendungsnummer (optional)</span><input type="text" id="ff-nr" placeholder="z. B. 00340434…"></label>'+
     '<label class="field"><span>Versanddienst</span><select id="ff-co"><option>DHL</option><option>Deutsche Post</option><option>Hermes</option><option>DPD</option><option>GLS</option><option>UPS</option><option value="Other">Sonstiger</option></select></label>'+
-    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="go">Versendet markieren 📦</button></div>',
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="go">Versenden</button></div>',
     {sticky:true}
   );
   m.querySelector('[data-x=no]').onclick=closeModal;
@@ -1152,9 +1163,9 @@ function openFulfillModal(o){
     try{
       await liveFetch("/admin/orders/"+encodeURIComponent(o.name)+"/fulfill",{method:"POST",body:JSON.stringify(nr?{trackingNumber:nr,trackingCompany:co}:{})});
       o.local.shippedMarkedAt=Date.now(); saveOrders();
-      closeModal(); toast("Versendet markiert ✓ – Kunde wird benachrichtigt");
+      closeModal(); toast("Versendet ✓ – Kunde wird benachrichtigt");
       try{ await liveSyncAll(); }catch(e){} render();
-    }catch(e){ go.disabled=false; go.textContent="Versendet markieren 📦"; toast(e.message,5000); }
+    }catch(e){ go.disabled=false; go.textContent="Versenden"; toast(e.message,5000); }
   };
 }
 function kv(k,v){ return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
@@ -1176,7 +1187,7 @@ function viewAnliegen(app){
   if(f==="offen"||f==="in Arbeit"||f==="erledigt") shown=list.filter(a=>a.status===f);
   else if(f.startsWith("kind:")) shown=list.filter(a=>a.kind===f.slice(5));
 
-  if(!shown.length){ wrap.appendChild(emptyBlock("Keine Anliegen","Kundenanfragen erscheinen hier – per Snapshot, Live-Sync oder E-Mail-Einfügen.","",null,openEmailPaste,"E-Mail einfügen")); app.appendChild(wrap); return; }
+  if(!shown.length){ wrap.appendChild(emptyBlock("Keine Anliegen","","",null,openEmailPaste,"E-Mail einfügen")); app.appendChild(wrap); return; }
 
   shown.forEach(a=>{
     const kindK={"Widerruf":"warn","Feedback":"info","Adressänderung":"info","DSGVO":"danger","Reparatur":"info","Chat-Nachricht":"muted","Sonstiges":"muted"}[a.kind]||"muted";
@@ -1192,7 +1203,7 @@ function viewAnliegen(app){
       '</div></div>';
     const acts=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
     if(a.customerEmail && liveConfigured() && a.fromDb){
-      const rb=el('<button class="btn btn-sm btn-primary">✉ Antworten</button>'); rb.onclick=()=>openReplyModal(a); acts.appendChild(rb);
+      const rb=el('<button class="btn btn-sm btn-primary">Antworten</button>'); rb.onclick=()=>openReplyModal(a); acts.appendChild(rb);
     } else if(a.customerEmail){
       acts.appendChild(el('<a class="btn btn-sm btn-ghost" href="mailto:'+esc(a.customerEmail)+'?subject='+encodeURIComponent("Deine Anfrage an M.IRIS")+'">Antworten</a>'));
     }
@@ -1215,8 +1226,8 @@ function openReplyModal(a){
     '<h2>Antwort an '+esc(a.customerName||a.customerEmail)+'</h2>'+
     '<p class="tiny muted">'+esc(a.thema||a.kind)+(a.relatedOrder?' · '+esc(a.relatedOrder):'')+' → '+esc(a.customerEmail)+'</p>'+
     '<div class="small" style="margin:10px 0;padding:8px;background:var(--surface2);max-height:100px;overflow-y:auto;white-space:pre-wrap">'+esc(a.nachricht||"")+'</div>'+
-    '<label class="field"><span>Deine Antwort (geht sofort als M.IRIS-E-Mail raus)</span><textarea id="rp-in" style="min-height:140px" placeholder="Nur den Mittelteil schreiben – Anrede („Hallo '+esc((a.customerName||"").split(" ")[0]||"…")+', vielen Dank…“) und Gruß („Liebe Grüße, dein M.IRIS Team“) ergänzt die E-Mail automatisch."></textarea></label>'+
-    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden ✉</button></div>',
+    '<label class="field"><span>Antwort</span><textarea id="rp-in" style="min-height:140px" placeholder="Nur der Mittelteil – Anrede & Gruß automatisch"></textarea></label>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden</button></div>',
     {sticky:true}
   );
   m.querySelector('[data-x=no]').onclick=closeModal;
@@ -1229,7 +1240,7 @@ function openReplyModal(a){
       const res=await liveFetch("/admin/anliegen/"+encodeURIComponent(a.id)+"/reply",{method:"POST",body:JSON.stringify({reply_text:text})});
       a.status="beantwortet"; a.replies=(a.replies||[]).concat([{text,at:new Date().toISOString()}]); saveAnliegen();
       closeModal(); toast("Antwort gesendet an "+(res.to||a.customerEmail)+" ✓"); render();
-    }catch(e){ sendBtn.disabled=false; sendBtn.textContent="Senden ✉"; toast("Senden fehlgeschlagen: "+e.message,4500); }
+    }catch(e){ sendBtn.disabled=false; sendBtn.textContent="Senden"; toast("Senden fehlgeschlagen: "+e.message,4500); }
   };
   m.querySelector("#rp-in").focus();
 }
@@ -1242,7 +1253,7 @@ async function setAnliegenStatus(a, status){
   }
 }
 function openEmailPaste(){
-  const m=showModal('<h2>E-Mail / Anliegen einfügen</h2><p class="muted small">Füge den Text einer "Chat-Nachricht"-, "Feedback"- oder Widerruf-Mail ein. Das Cockpit erkennt Art, Kunde, Thema & Bestellnummer automatisch.</p><label class="field"><span>E-Mail-Text</span><textarea id="ep-in" style="min-height:160px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Erkennen & speichern</button></div>');
+  const m=showModal('<h2>E-Mail / Anliegen einfügen</h2><label class="field"><span>E-Mail-Text</span><textarea id="ep-in" style="min-height:160px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Erkennen & speichern</button></div>');
   m.querySelector('[data-x=no]').onclick=closeModal;
   m.querySelector('[data-x=yes]').onclick=()=>{ const t=m.querySelector("#ep-in").value.trim(); if(!t){ toast("Bitte Text einfügen"); return; } const parsed=parseEmail(t); const r=mergeAnliegen([parsed]); closeModal(); toast((r.added?"Anliegen gespeichert":"Aktualisiert")+" ("+parsed.kind+")"); render(); };
 }
@@ -1264,9 +1275,9 @@ async function deleteAnliegen(a){
    ====================================================================== */
 function viewChats(app){
   const wrap=el('<div></div>');
-  wrap.innerHTML=pageHead("Chat-Verläufe","Suchen nach Name, E-Mail oder Bestellnummer – ansehen und löschen. Automatische Löschung nach 90 Tagen.");
+  wrap.innerHTML=pageHead("Chats","");
   if(!liveConfigured()){
-    wrap.appendChild(el('<div class="notice warn"><span class="ni">🔌</span><div>Chat-Verläufe brauchen das Live-Backend. Bitte in den <a href="#/einstellungen" style="text-decoration:underline">Einstellungen</a> Backend-URL + Admin-Token eintragen.</div></div>'));
+    wrap.appendChild(el('<div class="card"><p class="small">Backend nicht verbunden. <a href="#/einstellungen" style="text-decoration:underline">Einstellungen</a></p></div>'));
     app.appendChild(wrap); return;
   }
   const ctl=el('<div class="card" style="margin-bottom:12px"></div>');
@@ -1303,7 +1314,7 @@ function viewChats(app){
 function renderChatList(box){
   const chats=state.ui.chatResults||[];
   box.innerHTML="";
-  if(!chats.length){ box.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">❋</div><p>Keine Chat-Verläufe gefunden.</p></div></div>')); return; }
+  if(!chats.length){ box.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">❋</div><p>Keine Treffer.</p></div></div>')); return; }
   box.appendChild(el('<p class="tiny muted" style="margin-bottom:8px">'+chats.length+' Verlauf/Verläufe</p>'));
   chats.forEach(c=>{
     const it=el('<div class="card" style="padding:14px"></div>');
@@ -1432,7 +1443,7 @@ function viewKunde(app,emailArg){
   // Aktionen
   const acts=el('<div class="row" style="gap:8px;margin-bottom:16px"></div>');
   if(liveConfigured()){
-    const mb=el('<button class="btn btn-primary">✉ E-Mail senden</button>');
+    const mb=el('<button class="btn btn-primary">E-Mail senden</button>');
     mb.onclick=()=>openMailModal({email:c.email, firstName:(c.name||"").split(" ")[0], orderName:(c.orders[0]||{}).name||""});
     acts.appendChild(mb);
     const db=el('<button class="btn btn-danger btn-sm" style="margin-left:auto">DSGVO-Löschung</button>');
@@ -1572,11 +1583,11 @@ function openMailModal({email, firstName, orderName}){
     { id:"frei", label:"Freie Nachricht", subject:"" },
   ];
   const m=showModal('<h2>E-Mail an '+esc(firstName||email)+'</h2>'+
-    '<p class="tiny muted">'+esc(email)+' · Anrede & Gruß ergänzt die E-Mail automatisch</p>'+
+    '<p class="tiny muted">'+esc(email)+'</p>'+
     '<div class="seg" style="margin:12px 0" id="mm-preset">'+presets.map((p,i)=>'<button data-i="'+i+'" class="'+(i===0?"on":"")+'">'+esc(p.label)+'</button>').join("")+'</div>'+
     '<label class="field"><span>Betreff</span><input type="text" id="mm-subj" value="'+esc(presets[0].subject)+'"></label>'+
-    '<label class="field"><span>Nachricht (nur der Mittelteil)</span><textarea id="mm-msg" style="min-height:130px"></textarea></label>'+
-    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden ✉</button></div>',{sticky:true});
+    '<label class="field"><span>Nachricht</span><textarea id="mm-msg" style="min-height:130px" placeholder="Nur der Mittelteil – Anrede & Gruß automatisch"></textarea></label>'+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send">Senden</button></div>',{sticky:true});
   m.querySelector('[data-x=no]').onclick=closeModal;
   m.querySelectorAll("#mm-preset button").forEach(b=>b.onclick=()=>{
     m.querySelectorAll("#mm-preset button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
@@ -1595,7 +1606,7 @@ function openMailModal({email, firstName, orderName}){
       state.sentMails[key]=(state.sentMails[key]||[]).concat([{ts:Date.now(), subject, orderName:orderName||""}]).slice(-50);
       saveSentMails();
       closeModal(); toast("E-Mail gesendet an "+email+" ✓"); render();
-    }catch(e){ send.disabled=false; send.textContent="Senden ✉"; toast(e.message,5000); }
+    }catch(e){ send.disabled=false; send.textContent="Senden"; toast(e.message,5000); }
   };
   m.querySelector("#mm-msg").focus();
 }
@@ -1603,10 +1614,10 @@ function openMailModal({email, firstName, orderName}){
 /* ---------- Farbvorschau hochladen + senden ---------- */
 function openPreviewUpload(o){
   const m=showModal('<h2>Farbvorschau senden – '+esc(o.name)+'</h2>'+
-    '<p class="tiny muted">Foto wählen → Upload → der Kunde bekommt sofort die Freigabe-Mail (24h-Frist).</p>'+
+    
     '<input type="file" id="pv-file" accept="image/*" style="margin:12px 0">'+
     '<div id="pv-prev" style="display:none;margin-bottom:10px"><img id="pv-img" style="max-width:100%;max-height:220px;border:1px solid var(--line2)"></div>'+
-    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send" disabled>Hochladen & senden 🎨</button></div>',{sticky:true});
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send" disabled>Hochladen & senden</button></div>',{sticky:true});
   m.querySelector('[data-x=no]').onclick=closeModal;
   const fileInput=m.querySelector("#pv-file"), send=m.querySelector('[data-x=send]');
   let payload=null;
@@ -1639,20 +1650,20 @@ function openPreviewUpload(o){
       o.local.previewSentAt=Date.now(); saveOrders();
       closeModal(); toast("Farbvorschau gesendet an "+(r.to||"Kunde")+" ✓ (Frist 24h)");
       try{ await liveSyncAll(); }catch(e){} render();
-    }catch(e){ send.disabled=false; send.textContent="Hochladen & senden 🎨"; toast(e.message,6000); }
+    }catch(e){ send.disabled=false; send.textContent="Hochladen & senden"; toast(e.message,6000); }
   };
 }
 
 function viewGaps(app){
-  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("KI-Wissenslücken","Fragen, bei denen Mary nicht weiterhelfen konnte – Backlog für die Wissensbasis.");
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("KI-Wissenslücken","");
   const ctl=el('<div class="row" style="margin-bottom:12px"></div>');
-  const runBtn=el('<button class="btn btn-sm btn-primary">◐ Aus Anliegen analysieren</button>'); runBtn.onclick=()=>runGapsFromAnliegen(runBtn); ctl.appendChild(runBtn);
+  const runBtn=el('<button class="btn btn-sm btn-primary">Aus Anliegen analysieren</button>'); runBtn.onclick=()=>runGapsFromAnliegen(runBtn); ctl.appendChild(runBtn);
   const pasteBtn=el('<button class="btn btn-sm btn-ghost">Chat-Text einfügen…</button>'); pasteBtn.onclick=openGapPaste; ctl.appendChild(pasteBtn);
   wrap.appendChild(ctl);
-  if(!state.settings.apiKey) wrap.appendChild(el('<div class="notice warn"><span class="ni">🔑</span><div>Für die KI-Analyse brauchst du einen Anthropic-Schlüssel. <a href="#/einstellungen" style="text-decoration:underline">In den Einstellungen eintragen</a> (bleibt nur auf diesem Gerät).</div></div>'));
+  if(!state.settings.apiKey) wrap.appendChild(el('<div class="card"><p class="small">KI-Schlüssel fehlt. <a href="#/einstellungen" style="text-decoration:underline">Einstellungen</a></p></div>'));
 
   const gaps=Object.values(state.gaps).sort((a,b)=>b.haeufigkeit-a.haeufigkeit||b.createdAt-a.createdAt);
-  if(!gaps.length){ wrap.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◐</div><p>Noch keine Wissenslücken erfasst. Analysiere deine Anliegen oder füge einen Chat-Verlauf ein – die KI extrahiert die unbeantworteten Fragen.</p></div></div>')); app.appendChild(wrap); return; }
+  if(!gaps.length){ wrap.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◐</div><p>Noch keine Wissenslücken.</p></div></div>')); app.appendChild(wrap); return; }
   gaps.forEach(g=>{
     const it=el('<div class="card" style="padding:14px"></div>');
     const sk={neu:"warn",geplant:"info",eingebaut:"ok"}[g.status]||"muted";
@@ -1684,7 +1695,7 @@ async function runGapsFromAnliegen(btn){
   await runGapsWith(input,btn);
 }
 function openGapPaste(){
-  const m=showModal('<h2>Chat-Text analysieren</h2><p class="muted small">Füge Chat-Verläufe oder Kundenanfragen ein. Die KI extrahiert die Fragen, bei denen Mary nicht helfen konnte.</p><label class="field"><span>Text</span><textarea id="gp-in" style="min-height:180px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Analysieren</button></div>');
+  const m=showModal('<h2>Chat-Text analysieren</h2><label class="field"><span>Text</span><textarea id="gp-in" style="min-height:180px"></textarea></label><div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Analysieren</button></div>');
   m.querySelector('[data-x=no]').onclick=closeModal;
   m.querySelector('[data-x=yes]').onclick=()=>{ const t=m.querySelector("#gp-in").value.trim(); if(!t){ toast("Bitte Text einfügen"); return; } closeModal(); runGapsWith(t,null); };
 }
@@ -1693,18 +1704,17 @@ async function runGapsWith(input,btn){
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin"></span> Analysiere…'; }
   toast("KI analysiert…",6000);
   try{ const luecken=await runGapExtraction(input); const r=mergeGaps(luecken); toast(r.added?(r.added+" neue Wissenslücke(n) ✓"):"Keine neuen Lücken gefunden"); render(); }
-  catch(e){ toast(e.message||"Fehler bei der Analyse",4000); if(btn){ btn.disabled=false; btn.textContent="◐ Aus Anliegen analysieren"; } }
+  catch(e){ toast(e.message||"Fehler bei der Analyse",4000); if(btn){ btn.disabled=false; btn.textContent="Aus Anliegen analysieren"; } }
 }
 
 function viewGdpr(app){
-  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Augenbilder / DSGVO","Kundenfotos & Chats – markieren, löschen, dokumentieren.");
-  wrap.appendChild(el('<div class="notice"><span class="ni">ℹ️</span><div><b>Augenbilder</b> löschst du hier '+(liveConfigured()?'<b>echt aus Cloudinary</b> (Button „🗑 Löschen")':'per Löschliste (im Live-Modus direkt aus Cloudinary)')+'. <b>Chat-Verläufe</b> suchst und löschst du unter <a href="#/chats" style="text-decoration:underline">Chats</a> (nach Name/E-Mail/Datum), <b>Anliegen</b> in der <a href="#/anliegen" style="text-decoration:underline">Anliegen-Inbox</a>. Automatische Löschung: Chats & Augenfotos nach 90 Tagen.</div></div>'));
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("DSGVO","");
 
   // DSGVO-Ein-Klick: kompletter Kunden-Erase (nur Live-Modus)
   if(liveConfigured()){
     const dz=el('<div class="card" style="margin-top:12px"></div>');
-    dz.innerHTML='<h2 style="font-size:14px;margin-bottom:6px">🧹 Kunde komplett löschen (DSGVO-Anfrage)</h2>'+
-      '<p class="tiny muted" style="margin-bottom:10px">Löscht in einem Durchgang alles zu einem Kunden. E-Mail und/oder Bestellnummer angeben.</p>'+
+    dz.innerHTML='<h2 style="margin-bottom:6px">Kunde komplett löschen</h2>'+
+      
       '<div class="row" style="gap:8px"><input type="text" id="dz-email" placeholder="kunde@mail.de" value="'+esc(state.ui.dsgvoPrefill||"")+'" style="flex:1;min-width:160px"><input type="text" id="dz-order" placeholder="B1027" style="max-width:110px"></div>'+
       '<div class="row" style="gap:14px;margin-top:10px;flex-wrap:wrap" id="dz-opts">'+
       '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="photos" checked> Augenfotos</label>'+
@@ -1738,13 +1748,13 @@ function viewGdpr(app){
     };
     goRow.appendChild(go);
     dz.appendChild(goRow);
-    dz.appendChild(el('<p class="tiny muted" style="margin-top:8px">„Klaviyo-Profil" braucht einen API-Key mit Data-Privacy-Recht. Jede Löschung wird protokolliert (Nachweis).</p>'));
+    
     wrap.appendChild(dz);
     state.ui.dsgvoPrefill="";
   }
 
   const imgs=Object.values(state.images);
-  if(!imgs.length){ wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Keine Augenbilder erfasst. Bilder werden automatisch aus deinen Bestellungen (Line-Item "Auge N Bild") abgeleitet, sobald du Bestellungen importierst.</p></div></div>')); app.appendChild(wrap); return; }
+  if(!imgs.length){ wrap.appendChild(el('<div class="card" style="margin-top:12px"><div class="empty"><div class="e-ico">◉</div><p>Keine Augenbilder.</p></div></div>')); app.appendChild(wrap); return; }
 
   const flagged=imgs.filter(im=>im.flaggedForDeletion&&!im.deletedAt);
   const stat=el('<div class="row" style="margin:14px 0"><span class="badge">'+imgs.length+' Bilder</span><span class="badge warn">'+flagged.length+' zum Löschen</span><span class="badge ok">'+imgs.filter(im=>im.deletedAt).length+' gelöscht</span><span class="spacer"></span></div>');
@@ -1761,7 +1771,7 @@ function viewGdpr(app){
       (im.deletedAt?'<div class="badge ok" style="margin-top:6px">gelöscht '+esc(fmtDate(im.deletedAt))+'</div>':"");
     if(!im.deletedAt){ const row=el('<div class="row" style="margin-top:8px;gap:6px"></div>');
       if(liveConfigured()){
-        const del=el('<button class="btn btn-sm btn-danger">🗑 Löschen</button>');
+        const del=el('<button class="btn btn-sm btn-danger">Löschen</button>');
         del.onclick=()=>liveDeleteImages([im]); row.appendChild(del);
         const done=el('<button class="btn btn-sm btn-ghost" title="Nur im Cockpit als erledigt markieren">nur lokal</button>');
         done.onclick=()=>{ im.deletedAt=Date.now(); im.flaggedForDeletion=false; saveImages(); render(); }; row.appendChild(done);
@@ -1790,7 +1800,7 @@ async function liveDeleteImages(list){
 }
 
 function viewCalendar(app){
-  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Kalender & Aufgaben","Plane deine Arbeit – Tag antippen zum Bearbeiten.");
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Kalender","");
   const base=state.ui.calMonth?new Date(state.ui.calMonth):new Date(); base.setDate(1);
   const y=base.getFullYear(), mo=base.getMonth();
   const head=el('<div class="row" style="margin-bottom:12px"><button class="btn btn-sm btn-ghost" id="pm">‹</button><h2 style="font-size:16px;min-width:170px;text-align:center">'+base.toLocaleDateString("de-DE",{month:"long",year:"numeric"})+'</h2><button class="btn btn-sm btn-ghost" id="nm">›</button><span class="spacer"></span><button class="btn btn-sm btn-primary" id="today">Heute</button></div>');
@@ -1852,7 +1862,7 @@ function renderImportTools(container){
   const ta=el('<textarea id="snap-in" placeholder=\'{ "snapshotVersion":1, … }\' style="min-height:100px;margin-top:8px"></textarea>'); snap.appendChild(ta);
   const sb=el('<button class="btn btn-sm btn-primary" style="margin-top:8px">Importieren</button>'); sb.onclick=()=>{ try{ const r=importSnapshot(ta.value); toast("Import: "+r.orders.added+" neu, "+r.orders.updated+" aktualisiert · "+r.anliegen.added+" Anliegen"); render(); }catch(e){ toast(e.message,4000); } }; snap.appendChild(sb);
   container.appendChild(snap);
-  const csv=el('<details style="margin-top:6px"><summary class="small" style="cursor:pointer;padding:6px 0">Shopify-CSV importieren</summary><p class="tiny muted" style="margin:6px 0">Ohne Farbvorschau-Felder – die pflegt der Live-Sync.</p></details>');
+  const csv=el('<details style="margin-top:6px"><summary class="small" style="cursor:pointer;padding:6px 0">Shopify-CSV importieren</summary></details>');
   const file=el('<input type="file" accept=".csv,text/csv" style="margin-top:4px">'); file.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const r=importCSV(rd.result); toast("CSV: "+r.added+" neu, "+r.updated+" aktualisiert"); render(); }catch(err){ toast(err.message,4000); } }; rd.readAsText(f); }; csv.appendChild(file);
   container.appendChild(csv);
   const eml=el('<details style="margin-top:6px"><summary class="small" style="cursor:pointer;padding:6px 0">E-Mail als Anliegen erfassen</summary></details>');
@@ -1903,12 +1913,12 @@ function openGlobalSearch(){
 function viewSettings(app){
   const s=state.settings; const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Einstellungen","");
   // KI
-  const ai=el('<div class="card"></div>'); ai.innerHTML='<h2 style="font-size:15px">KI (Anthropic)</h2><p class="muted small" style="margin:6px 0 12px">Für die Wissenslücken-Analyse. Der Schlüssel bleibt nur auf diesem Gerät (localStorage) und ist nie im Backup enthalten.</p>';
+  const ai=el('<div class="card"></div>'); ai.innerHTML='<h2 style="font-size:15px">KI (Anthropic)</h2>';
   ai.appendChild(field("API-Schlüssel",'<input type="password" id="s-key" value="'+esc(s.apiKey)+'" placeholder="sk-ant-…" autocomplete="off">'));
   ai.appendChild(field("Modell",'<select id="s-model">'+AI_MODELS.map(m=>'<option value="'+m.id+'"'+(s.model===m.id?" selected":"")+'>'+esc(m.label)+'</option>').join("")+'</select>'));
   wrap.appendChild(ai);
   // backend
-  const be=el('<div class="card"></div>'); be.innerHTML='<h2 style="font-size:15px">Live-Backend (Admin-Dienst)</h2><p class="muted small" style="margin:6px 0 12px">Sobald dein Admin-Dienst läuft (Phase 2): URL + Admin-Token eintragen. Beide bleiben nur auf diesem Gerät und sind nie im Backup.</p>';
+  const be=el('<div class="card"></div>'); be.innerHTML='<h2 style="font-size:15px">Live-Backend (Admin-Dienst)</h2>';
   be.appendChild(field("Backend-URL",'<input type="text" id="s-url" value="'+esc(s.backendUrl)+'" placeholder="https://miris-cockpit-api.…">'));
   be.appendChild(field("Admin-Token",'<input type="password" id="s-token" value="'+esc(s.adminToken)+'" placeholder="Bearer-Token" autocomplete="off">'));
   wrap.appendChild(be);
@@ -1921,7 +1931,7 @@ function viewSettings(app){
   saveBtn.onclick=()=>{ s.apiKey=wrap.querySelector("#s-key").value.trim(); s.model=wrap.querySelector("#s-model").value; s.backendUrl=wrap.querySelector("#s-url").value.trim(); s.adminToken=wrap.querySelector("#s-token").value.trim(); s.mahnungDays=Math.max(1,num(wrap.querySelector("#s-mahn").value,7)); saveSettings(); toast("Gespeichert"); renderChrome(parseRoute().name); };
   wrap.appendChild(saveBtn);
   // data
-  const data=el('<div class="card"></div>'); data.innerHTML='<h2 style="font-size:15px">Daten</h2><p class="muted small" style="margin:6px 0 12px">Backup enthält keine Schlüssel/Token.</p>';
+  const data=el('<div class="card"></div>'); data.innerHTML='<h2 style="font-size:15px">Daten</h2>';
   const expB=el('<button class="btn btn-ghost">Backup exportieren</button>'); expB.onclick=exportBackup; data.appendChild(expB);
   const impB=el('<label class="btn btn-ghost" style="margin-left:8px">Backup importieren<input type="file" accept=".json" style="display:none"></label>'); impB.querySelector("input").onchange=(e)=>importBackup(e.target.files[0]); data.appendChild(impB);
   const demoB=el('<button class="btn btn-ghost" style="margin-left:8px">Demo-Daten entfernen</button>');
@@ -1934,7 +1944,6 @@ function viewSettings(app){
   renderImportTools(data);
   wrap.appendChild(data);
   // about
-  wrap.appendChild(el('<p class="muted tiny" style="margin-top:16px;text-align:center">M.IRIS Cockpit · Speicher: '+(Store.available?"localStorage":"nur Arbeitsspeicher (Achtung: nicht dauerhaft)")+' · Schema v'+SCHEMA_VERSION+'</p>'));
   app.appendChild(wrap);
 }
 function field(label,inner){ return el('<label class="field"><span>'+esc(label)+'</span>'+inner+'</label>'); }
