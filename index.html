@@ -797,11 +797,12 @@ const NAV_ITEMS=[
   {name:"wissensluecken",label:"KI-Wissenslücken",ico:"◐",short:"KI-Lücken"},
   {name:"kalender",label:"Kalender",ico:"▤",short:"Plan"},
   {name:"dsgvo",label:"DSGVO",ico:"◉",short:"DSGVO"},
+  {name:"bank",label:"Bank",ico:"€",short:"Bank"},
   {name:"einstellungen",label:"Einstellungen",ico:"⚙",short:"Setup"}
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, import:viewImportRedirect, einstellungen:viewSettings };
+const views={ home:viewDashboard, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, import:viewImportRedirect, einstellungen:viewSettings };
 function viewImportRedirect(){ nav("#/einstellungen"); } // Alias: alte Lesezeichen/Links
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
@@ -817,7 +818,7 @@ function mahnungFaelligCount(now){
 }
 function renderChrome(activeName){
   // topbar title + mode + Sync + Suche
-  const titleMap={ home:"Heute", bestellungen:"Bestellungen", bestellung:"Bestellung", kunden:"Kunden", kunde:"Kundenakte", anliegen:"Inbox", chats:"Chats", wissensluecken:"KI-Wissenslücken", dsgvo:"DSGVO", kalender:"Kalender", tag:"Tagesplan", einstellungen:"Einstellungen" };
+  const titleMap={ home:"Heute", bestellungen:"Bestellungen", bestellung:"Bestellung", kunden:"Kunden", kunde:"Kundenakte", anliegen:"Inbox", chats:"Chats", wissensluecken:"KI-Wissenslücken", dsgvo:"DSGVO", kalender:"Kalender", tag:"Tagesplan", bank:"Bank", einstellungen:"Einstellungen" };
   document.getElementById("tb-title").textContent=titleMap[activeName]||"Cockpit";
   const mode=document.getElementById("tb-mode"); const live=liveConfigured();
   mode.textContent=state.ui.syncing?"Sync…":(live?"Live":"Import"); mode.classList.toggle("live",live);
@@ -825,7 +826,7 @@ function renderChrome(activeName){
   const rBtn=document.getElementById("tb-sync"); if(rBtn){ rBtn.onclick=()=>{ if(liveConfigured()) doLiveSync(); else nav("#/import"); }; rBtn.classList.toggle("spinning",!!state.ui.syncing); }
   // side + bottom nav
   const side=document.getElementById("sidenav"); const bot=document.getElementById("bottomnav");
-  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount() };
+  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0) };
   side.innerHTML=NAV_ITEMS.map(it=>{
     const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const badge=c?'<span class="n-badge">'+c+'</span>':"";
@@ -833,7 +834,7 @@ function renderChrome(activeName){
   }).join("");
   // Mobil: 4 Primärtabs + „Mehr"-Sheet (Rest inkl. Einstellungen ist damit überall erreichbar)
   const primary=NAV_ITEMS.filter(it=>["home","bestellungen","kunden","anliegen"].includes(it.name));
-  const moreNames=["chats","wissensluecken","kalender","dsgvo","einstellungen"];
+  const moreNames=["bank","chats","wissensluecken","kalender","dsgvo","einstellungen"];
   const moreCount=(counts.dsgvo||0)+(counts.wissensluecken||0);
   bot.innerHTML=primary.map(it=>{
     const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
@@ -855,7 +856,7 @@ function openMoreSheet(names,counts){
     list.appendChild(row);
   });
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
@@ -979,6 +980,56 @@ function queueCard(ico,title,count){
   return c;
 }
 function kpi(label,val,sub){ return '<div class="kpi"><div class="k-label">'+esc(label)+'</div><div class="k-val">'+esc(val)+'</div><div class="k-sub">'+esc(sub||"")+'</div></div>'; }
+
+/* ======================================================================
+   Bank — eigener Menüpunkt: Verbindung, Abgleich, Zahlungseingänge
+   ====================================================================== */
+function viewBank(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Bank","");
+  if(!liveConfigured()){ wrap.appendChild(emptyBlock("Kein Backend","Zuerst in den Einstellungen Backend-URL + Admin-Token speichern.","#/einstellungen","Zu den Einstellungen")); app.appendChild(wrap); return; }
+
+  // Verbindungs-Karte (Status + Aktionen)
+  const card=el('<div class="card"></div>');
+  card.innerHTML='<div class="row"><h2 style="font-size:14px">Kontoverbindung</h2><span class="spacer"></span><span id="bk-badge"></span></div><div id="bk-status" class="small muted" style="margin:8px 0 12px">Lade…</div>';
+  const brow=el('<div class="row" style="gap:8px"></div>');
+  const connectBtn=el('<button class="btn btn-primary btn-sm">Bank verbinden</button>');
+  connectBtn.onclick=async()=>{ connectBtn.disabled=true; try{ const r=await liveFetch("/admin/bank/connect",{method:"POST"}); if(r&&r.url){ window.open(r.url,"_blank","noopener"); toast("Fenster geöffnet – bei der Bank anmelden"); } else toast("Keine Verbindungs-URL erhalten"); }catch(e){ toast(e.message,6000); } finally{ connectBtn.disabled=false; } };
+  const syncBtn=el('<button class="btn btn-ghost btn-sm">Jetzt abgleichen</button>');
+  syncBtn.onclick=async()=>{ syncBtn.disabled=true; syncBtn.innerHTML='<span class="spin"></span>'; try{ const r=await liveFetch("/admin/bank/sync",{method:"POST"}); if(r&&r.skipped) toast("Vor <6h abgeglichen – Bank erlaubt nur ~4×/Tag"); else if(r&&r.needsReconsent) toast("Consent abgelaufen – bitte neu verbinden",6000); else if(r&&r.needsConnect) toast("Noch nicht verbunden"); else toast(((r&&r.autoPaid)?r.autoPaid.length:0)+" automatisch bezahlt · "+((r&&r.review)||0)+" zu prüfen",5000); try{await liveSyncAll();}catch(e){} render(); }catch(e){ syncBtn.disabled=false; syncBtn.textContent="Jetzt abgleichen"; toast(e.message,6000); } };
+  brow.appendChild(connectBtn); brow.appendChild(syncBtn); card.appendChild(brow);
+  wrap.appendChild(card);
+
+  const fillBank=(bs)=>{ const st=card.querySelector("#bk-status"), bd=card.querySelector("#bk-badge"); if(!st) return;
+    if(!bs||!bs.configured){ st.textContent="Enable Banking im Backend noch nicht eingerichtet."; return; }
+    if(!bs.connected){ st.innerHTML='Nicht verbunden.'+(bs.needsReconsent?' <b style="color:var(--danger)">Consent abgelaufen.</b>':''); if(bd) bd.innerHTML='<span class="badge warn">offen</span>'; return; }
+    const exp=bs.daysUntilExpiry; const warn=(exp!=null&&exp<14);
+    if(bd) bd.innerHTML='<span class="badge '+(bs.dryRun?"warn":"ok")+'">'+(bs.dryRun?"Testmodus":"aktiv")+'</span>';
+    st.innerHTML=kv("Konto",esc(bs.ibanMasked||'—'))+
+      kv("Bank",esc(bs.aspspName||'—'))+
+      kv("Letzter Abgleich",bs.lastSyncAt?esc(fmtDateTime(new Date(bs.lastSyncAt).getTime())):'noch nie')+
+      (exp!=null?kv("Zugriff gültig",exp+' Tage'+(warn?' <b style="color:var(--danger)">– bald erneuern</b>':'')):'');
+  };
+  if(state.bankStatus) fillBank(state.bankStatus);
+  liveFetch("/admin/bank/status").then(bs=>{ state.bankStatus=bs; fillBank(bs); }).catch(()=>{ const st=card.querySelector("#bk-status"); if(st) st.textContent="Status nicht abrufbar."; });
+
+  // Zahlungseingänge zur Prüfung (die uneindeutigen; eindeutige sind schon auto-verbucht)
+  const review=Array.isArray(state.bankReview)?state.bankReview:[];
+  const rc=sectionCard("Zahlungseingänge prüfen"+(review.length?" ("+review.length+")":""));
+  if(!review.length) rc.appendChild(el('<div class="q-row"><span class="q-main muted small">Nichts zu prüfen – eindeutige Zahlungen werden automatisch verbucht.</span></div>'));
+  else review.forEach(bt=>{
+    const cand=bt.orderName||"";
+    const row=el('<div class="q-row"><span class="q-main"><b>'+esc(fmtMoney(bt.amount,bt.currency))+'</b> <span class="muted">'+esc(bt.payerName||"—")+(bt.remittanceExcerpt?' · '+esc(bt.remittanceExcerpt.slice(0,40)):"")+(cand?' → '+esc(cand):"")+'</span></span></div>');
+    const grp=el('<span style="display:flex;gap:6px"></span>');
+    const okb=el('<button class="btn btn-sm btn-primary">Bezahlt</button>'); okb.onclick=()=>openBankResolve(bt);
+    const nob=el('<button class="btn btn-sm btn-ghost">Verwerfen</button>');
+    nob.onclick=async()=>{ if(!await confirmDialog("Verwerfen?","Diesen Zahlungseingang ignorieren (keine Bestellung bezahlt)?","Verwerfen")) return;
+      try{ await liveFetch("/admin/bank/review/"+encodeURIComponent(bt.dedupKey)+"/resolve",{method:"POST",body:JSON.stringify({status:"dismissed"})}); state.bankReview=review.filter(x=>x.dedupKey!==bt.dedupKey); saveBankReview(); toast("Verworfen"); render(); }
+      catch(e){ toast(e.message,5000); } };
+    grp.appendChild(okb); grp.appendChild(nob); row.appendChild(grp); rc.appendChild(row);
+  });
+  wrap.appendChild(rc);
+  app.appendChild(wrap);
+}
 
 /* Zahlungseingang prüfen: Bestellung wählen und als bezahlt bestätigen. */
 function openBankResolve(bt){
@@ -1984,23 +2035,6 @@ function viewSettings(app){
   const biz=el('<div class="card"></div>'); biz.innerHTML='<h2 style="font-size:15px">Geschäftslogik</h2>';
   biz.appendChild(field("Mahnung fällig nach (Tagen)",'<input type="number" id="s-mahn" value="'+num(s.mahnungDays,7)+'" min="1" max="90">'));
   wrap.appendChild(biz);
-  // Bank (Zahlungsabgleich)
-  const bank=el('<div class="card"></div>'); bank.innerHTML='<h2 style="font-size:15px">Bank (Zahlungsabgleich)</h2><div id="bank-status" class="small muted" style="margin:6px 0 12px">…</div>';
-  const brow=el('<div class="row" style="gap:8px"></div>');
-  const connectBtn=el('<button class="btn btn-primary btn-sm">Bank verbinden</button>');
-  connectBtn.onclick=async()=>{ connectBtn.disabled=true; try{ const r=await liveFetch("/admin/bank/connect",{method:"POST"}); if(r&&r.url){ window.open(r.url,"_blank","noopener"); toast("Fenster geöffnet – bei der Sparkasse anmelden"); } else toast("Keine Verbindungs-URL erhalten"); }catch(e){ toast(e.message,6000); } finally{ connectBtn.disabled=false; } };
-  const syncBtn=el('<button class="btn btn-ghost btn-sm">Jetzt abgleichen</button>');
-  syncBtn.onclick=async()=>{ syncBtn.disabled=true; syncBtn.innerHTML='<span class="spin"></span>'; try{ const r=await liveFetch("/admin/bank/sync",{method:"POST"}); if(r&&r.skipped) toast("Vor <6h abgeglichen – Bank erlaubt nur ~4×/Tag"); else if(r&&r.needsReconsent) toast("Consent abgelaufen – bitte neu verbinden",6000); else if(r&&r.needsConnect) toast("Noch nicht verbunden"); else toast(((r&&r.autoPaid)?r.autoPaid.length:0)+" automatisch bezahlt · "+((r&&r.review)||0)+" zu prüfen",5000); try{await liveSyncAll();}catch(e){} render(); }catch(e){ syncBtn.disabled=false; syncBtn.textContent="Jetzt abgleichen"; toast(e.message,6000); } };
-  brow.appendChild(connectBtn); brow.appendChild(syncBtn); bank.appendChild(brow);
-  const fillBank=(bs)=>{ const el2=bank.querySelector("#bank-status"); if(!el2) return;
-    if(!bs||!bs.configured){ el2.innerHTML='Enable Banking im Backend noch nicht eingerichtet (Schlüssel fehlen).'; return; }
-    if(!bs.connected){ el2.innerHTML='Nicht verbunden.'+(bs.needsReconsent?' <b style="color:var(--danger)">Consent abgelaufen.</b>':''); return; }
-    const exp=bs.daysUntilExpiry; const warn=(exp!=null&&exp<14);
-    el2.innerHTML='Verbunden: '+esc(bs.ibanMasked||'')+(bs.lastSyncAt?' · letzter Abgleich '+esc(fmtDateTime(new Date(bs.lastSyncAt).getTime())):' · noch nicht abgeglichen')+(exp!=null?' · Consent läuft in '+exp+' Tagen'+(warn?' <b style="color:var(--danger)">– bald erneuern</b>':''):'')+(bs.dryRun?' · <b>Testmodus</b>':'');
-  };
-  if(!liveConfigured()){ bank.querySelector("#bank-status").textContent="Zuerst Backend-URL + Admin-Token speichern."; }
-  else { if(state.bankStatus) fillBank(state.bankStatus); liveFetch("/admin/bank/status").then(bs=>{ state.bankStatus=bs; fillBank(bs); }).catch(()=>{ const e2=bank.querySelector("#bank-status"); if(e2) e2.textContent="Status nicht abrufbar."; }); }
-  wrap.appendChild(bank);
   // save
   const saveBtn=el('<button class="btn btn-primary btn-block" style="margin-top:4px">Speichern</button>');
   saveBtn.onclick=()=>{ s.apiKey=wrap.querySelector("#s-key").value.trim(); s.model=wrap.querySelector("#s-model").value; s.backendUrl=wrap.querySelector("#s-url").value.trim(); s.adminToken=wrap.querySelector("#s-token").value.trim(); s.mahnungDays=Math.max(1,num(wrap.querySelector("#s-mahn").value,7)); saveSettings(); toast("Gespeichert"); renderChrome(parseRoute().name); };
