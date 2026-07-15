@@ -104,6 +104,7 @@ h2,h3{font-family:var(--sans);font-weight:800;font-size:11px;letter-spacing:.09e
 #lockscreen .lock-box{width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
 #lockscreen .lock-logo{width:190px;max-width:72%;height:auto;margin-bottom:6px}
 #lockscreen .lock-hint{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+#lockscreen .lock-or{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
 #lockscreen #lock-input{width:100%;text-align:center;font-size:26px;letter-spacing:.42em;padding:14px 10px;border:1px solid var(--line2);background:var(--surface);color:var(--ink)}
 #lockscreen #lock-input:focus{outline:2px solid var(--ink);outline-offset:2px}
 #lockscreen .lock-err{font-size:13px;color:var(--danger);min-height:18px}
@@ -2080,6 +2081,16 @@ function viewSettings(app){
   const biz=el('<div class="card"></div>'); biz.innerHTML='<h2 style="font-size:15px">Geschäftslogik</h2>';
   biz.appendChild(field("Mahnung fällig nach (Tagen)",'<input type="number" id="s-mahn" value="'+num(s.mahnungDays,7)+'" min="1" max="90">'));
   wrap.appendChild(biz);
+  // Sicherheit (Face ID / Touch ID)
+  const sec=el('<div class="card"></div>'); sec.innerHTML='<h2 style="font-size:15px">Sicherheit</h2><p class="small muted" style="margin:6px 0 10px" id="sec-status"></p>';
+  const secBtn=el('<button class="btn btn-sm"></button>');
+  const paintSec=()=>{ const st=sec.querySelector("#sec-status");
+    if(!faceIdSupported()){ st.textContent="Face ID/Touch ID auf diesem Gerät/Browser nicht verfügbar. Entsperren per Code."; secBtn.style.display="none"; return; }
+    if(faceIdOn()){ st.textContent="Face ID ist aktiv. Beim Öffnen entsperrst du per Gesicht/Finger, der Code bleibt als Rückfall."; secBtn.textContent="Face ID zurücksetzen"; secBtn.className="btn btn-sm btn-danger"; }
+    else{ st.textContent="Aktiviere Face ID/Touch ID, um die App beim Öffnen ohne Code zu entsperren (Code bleibt als Rückfall)."; secBtn.textContent="Face ID aktivieren"; secBtn.className="btn btn-sm btn-primary"; }
+  };
+  secBtn.onclick=async()=>{ if(faceIdOn()){ faceIdReset(); toast("Face ID zurückgesetzt"); paintSec(); return; } secBtn.disabled=true; try{ await faceIdRegister(); toast("Face ID aktiviert ✓"); }catch(e){ toast("Face ID nicht möglich: "+(e.message||e),5000); } secBtn.disabled=false; paintSec(); };
+  sec.appendChild(secBtn); paintSec(); wrap.appendChild(sec);
   // save
   const saveBtn=el('<button class="btn btn-primary btn-block" style="margin-top:4px">Speichern</button>');
   saveBtn.onclick=()=>{ s.apiKey=wrap.querySelector("#s-key").value.trim(); s.model=wrap.querySelector("#s-model").value; s.backendUrl=wrap.querySelector("#s-url").value.trim(); s.adminToken=wrap.querySelector("#s-token").value.trim(); s.mahnungDays=Math.max(1,num(wrap.querySelector("#s-mahn").value,7)); saveSettings(); toast("Gespeichert"); renderChrome(parseRoute().name); };
@@ -2173,23 +2184,57 @@ function seedDemo(){
 const LOCK_CODE="231205";
 function isUnlocked(){ try{ return sessionStorage.getItem("miris.unlocked")==="1"; }catch(e){ return !!window.__unlocked; } }
 function setUnlocked(){ try{ sessionStorage.setItem("miris.unlocked","1"); }catch(e){ window.__unlocked=true; } }
+/* Face ID / Touch ID via WebAuthn (Passkey-Technik, geräte- + domaingebunden). Code bleibt Rückfall. */
+const FACEID_KEY="miris.faceid";
+const RP_ID=location.hostname;
+function b64uEnc(buf){ let s=""; const u=new Uint8Array(buf); for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]); return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function b64uDec(b64){ b64=b64.replace(/-/g,"+").replace(/_/g,"/"); while(b64.length%4)b64+="="; const bin=atob(b64); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); return u.buffer; }
+function faceIdSupported(){ return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create && (location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1")); }
+function faceIdOn(){ try{ return !!localStorage.getItem(FACEID_KEY); }catch(e){ return false; } }
+async function faceIdRegister(){
+  const cred=await navigator.credentials.create({ publicKey:{
+    challenge:crypto.getRandomValues(new Uint8Array(32)),
+    rp:{ name:"M.IRIS Cockpit", id:RP_ID },
+    user:{ id:crypto.getRandomValues(new Uint8Array(16)), name:"miris", displayName:"M.IRIS" },
+    pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],
+    authenticatorSelection:{ authenticatorAttachment:"platform", userVerification:"required" },
+    timeout:60000, attestation:"none",
+  }});
+  localStorage.setItem(FACEID_KEY, b64uEnc(cred.rawId)); return true;
+}
+async function faceIdVerify(){
+  const id=localStorage.getItem(FACEID_KEY); if(!id) return false;
+  await navigator.credentials.get({ publicKey:{
+    challenge:crypto.getRandomValues(new Uint8Array(32)),
+    allowCredentials:[{ type:"public-key", id:b64uDec(id) }],
+    userVerification:"required", timeout:60000, rpId:RP_ID,
+  }});
+  return true;
+}
+function faceIdReset(){ try{ localStorage.removeItem(FACEID_KEY); }catch(e){} }
+function doUnlock(){ setUnlocked(); const ls=document.getElementById("lockscreen"); if(ls){ ls.classList.remove("show"); ls.innerHTML=""; } startApp(); }
+
 function showLock(){
   const ls=document.getElementById("lockscreen"); if(!ls) return;
   ls.classList.add("show");
+  const canFace=faceIdSupported(), reg=faceIdOn();
   ls.innerHTML='<div class="lock-box"><img class="lock-logo" src="'+MIRIS_LOGO+'" alt="M.IRIS">'+
-    '<div class="lock-hint">Code eingeben</div>'+
+    (canFace&&reg?'<button class="btn btn-primary btn-block" id="lock-face">Mit Face ID entsperren</button><div class="lock-or">oder Code eingeben</div>':'<div class="lock-hint">Code eingeben</div>')+
     '<input id="lock-input" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="••••••">'+
-    '<button class="btn btn-primary btn-block" id="lock-go">Entsperren</button>'+
+    '<button class="btn '+(canFace&&reg?"btn-ghost":"btn-primary")+' btn-block" id="lock-go">Entsperren</button>'+
+    (canFace&&!reg?'<button class="btn btn-ghost btn-block" id="lock-face-setup">Face ID aktivieren</button>':'')+
     '<div class="lock-err" id="lock-err"></div></div>';
   const inp=ls.querySelector("#lock-input"), go=ls.querySelector("#lock-go"), err=ls.querySelector("#lock-err"), box=ls.querySelector(".lock-box");
-  const attempt=()=>{
-    if(inp.value===LOCK_CODE){ setUnlocked(); ls.classList.remove("show"); ls.innerHTML=""; startApp(); }
-    else{ err.textContent="Falscher Code"; box.classList.add("shake"); inp.value=""; setTimeout(()=>box.classList.remove("shake"),400); inp.focus(); }
-  };
-  go.onclick=attempt;
-  inp.addEventListener("input",()=>{ err.textContent=""; if(inp.value.length>=6) attempt(); });
-  inp.addEventListener("keydown",e=>{ if(e.key==="Enter") attempt(); });
-  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },120);
+  const shake=(msg)=>{ err.textContent=msg; box.classList.add("shake"); setTimeout(()=>box.classList.remove("shake"),400); };
+  const codeAttempt=()=>{ if(inp.value===LOCK_CODE) doUnlock(); else { inp.value=""; shake("Falscher Code"); try{inp.focus();}catch(e){} } };
+  go.onclick=codeAttempt;
+  inp.addEventListener("input",()=>{ err.textContent=""; if(inp.value.length>=6) codeAttempt(); });
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter") codeAttempt(); });
+  const fb=ls.querySelector("#lock-face");
+  if(fb) fb.onclick=async()=>{ err.textContent=""; fb.disabled=true; fb.textContent="Face ID…"; try{ await faceIdVerify(); doUnlock(); }catch(e){ fb.disabled=false; fb.textContent="Mit Face ID entsperren"; shake("Nicht erkannt – Code nutzen"); } };
+  const fs=ls.querySelector("#lock-face-setup");
+  if(fs) fs.onclick=async()=>{ err.textContent=""; fs.disabled=true; fs.textContent="Face ID…"; try{ await faceIdRegister(); doUnlock(); }catch(e){ fs.disabled=false; fs.textContent="Face ID aktivieren"; shake("Face ID nicht möglich"); } };
+  if(!(canFace&&reg)) setTimeout(()=>{ try{ inp.focus(); }catch(e){} },120);
 }
 function startApp(){
   render();
