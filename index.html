@@ -307,7 +307,7 @@ const SCHEMA_VERSION = 1;
 const K = {
   meta:"miris.meta", settings:"miris.settings", orders:"miris.orders",
   anliegen:"miris.anliegen", gaps:"miris.gaps", images:"miris.images",
-  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails"
+  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails", bankReview:"miris.bankReview"
 };
 const DEFAULT_SETTINGS = {
   apiKey:"", model:"claude-opus-4-8", backendUrl:"", adminToken:"",
@@ -366,6 +366,7 @@ function sanitizeOrder(o){
     lineItems, miris,
     adminUrl: str(o.adminUrl,400),
     isWiderruf: !!o.isWiderruf,
+    autoPaidByBank: !!o.autoPaidByBank,
     cancelledAt: o.cancelledAt || null,
     shippingAddress: (o.shippingAddress && typeof o.shippingAddress==="object") ? o.shippingAddress : null,
     local, _sourceHash: str(o._sourceHash,64), updatedAt: tsMs(o.updatedAt)||Date.now()
@@ -433,6 +434,8 @@ const state = {
   orders:{}, anliegen:{}, gaps:{}, images:{}, days:{}, importlog:{},
   dismissed:{},   // dauerhaft im Cockpit gelöschte Anliegen-IDs (kommen beim Sync nicht zurück)
   sentMails:{},   // Sendeprotokoll je Kunde (nur lokal; Klaviyo ist die autoritative Historie)
+  bankReview:[],  // Zahlungseingänge zur manuellen Prüfung (Server-Wahrheit, gespiegelt)
+  bankStatus:null,// letzter Bank-Status (RAM-Spiegel; im importlog gehalten)
   ui:{ ordersView:"kanban", ordersFilter:"", ordersQuery:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null,
        kundenQuery:"", chatQuery:"", chatFrom:"", chatTo:"", chatResults:null }   // Chats nur im RAM (Datenschutz)
 };
@@ -451,6 +454,7 @@ function loadState(){
   state.importlog = Store.get(K.importlog,{}) || {};
   const dm = Store.get(K.dismissed,{}); state.dismissed = (dm && typeof dm==="object" && !Array.isArray(dm)) ? dm : {};
   const sm = Store.get(K.sentMails,{}); state.sentMails = (sm && typeof sm==="object" && !Array.isArray(sm)) ? sm : {};
+  const brv = Store.get(K.bankReview,[]); state.bankReview = Array.isArray(brv) ? brv : [];
   // Speicher-Hygiene: Altlasten automatisch ausmisten
   try{
     const now=Date.now(); let prunedI=0, prunedD=0;
@@ -475,6 +479,7 @@ function saveGaps(){ persist(["gaps"]); } function saveImages(){ persist(["image
 function saveDays(){ persist(["days"]); } function saveSettings(){ persist(["settings"]); }
 function saveImportlog(){ persist(["importlog"]); } function saveDismissed(){ persist(["dismissed"]); }
 function saveSentMails(){ persist(["sentMails"]); }
+function saveBankReview(){ persist(["bankReview"]); }
 
 /* ---------- Helfer ---------- */
 function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
@@ -514,6 +519,7 @@ function categorize(o, settings, now){
   const titles=(o.lineItems||[]).map(li=>li.title).join(" ");
   const isRepair = !!m.repair_status || /reparatur/i.test(titles);
   const badges=[];
+  if(o.autoPaidByBank) badges.push({t:"Auto-bezahlt (Bank)",k:"ok"});
   if(o.isWiderruf) badges.push({t:"Widerruf",k:"warn"});
   if(fin==="voided") badges.push({t:"Storniert",k:"muted"});
   if(fin==="refunded"||fin==="partially_refunded") badges.push({t:"Erstattet",k:"muted"});
@@ -576,7 +582,7 @@ function todaysTasks(){ return (state.days[todayStr()]||[]); }
    Daten-Provider: Import (JSON/CSV/E-Mail) + Live (Admin-Dienst)
    ====================================================================== */
 function orderSourceHash(o){ // hash über Remote-Felder (ohne local{})
-  return hashId(JSON.stringify({n:o.name,c:o.createdAt,t:o.totalPrice,f:o.financialStatus,fu:o.fulfillmentStatus,m:o.miris,li:o.lineItems,w:o.isWiderruf,sa:o.shippingAddress,ca:o.cancelledAt,e:o.customerEmail}));
+  return hashId(JSON.stringify({n:o.name,c:o.createdAt,t:o.totalPrice,f:o.financialStatus,fu:o.fulfillmentStatus,m:o.miris,li:o.lineItems,w:o.isWiderruf,sa:o.shippingAddress,ca:o.cancelledAt,e:o.customerEmail,ab:o.autoPaidByBank}));
 }
 function mergeOrders(incoming){
   let added=0,updated=0;
@@ -742,6 +748,10 @@ async function liveSyncAll(){
     }
   }catch(e){}
   try{ const im=await liveFetch("/admin/images"); if(im&&Array.isArray(im.images)) out.images=mergeImages(im.images); }catch(e){}
+  // Bank-Zahlungsabgleich: Review-Liste + Status (Server ist die Wahrheit). Fehler hier
+  // dürfen den Haupt-Sync nie brechen.
+  try{ const bv=await liveFetch("/admin/bank/review"); if(bv&&Array.isArray(bv.review)){ state.bankReview=bv.review; saveBankReview(); } }catch(e){}
+  try{ const bs=await liveFetch("/admin/bank/status"); if(bs) state.bankStatus=bs; }catch(e){}
   const derived=deriveImagesFromOrders(); if(derived.length) mergeImages(derived);
   state.importlog.lastLiveAt=Date.now(); saveImportlog();
   return out;
@@ -885,6 +895,26 @@ function viewDashboard(app){
   const q=el('<div style="margin-top:18px"></div>');
   let queued=0;
 
+  // Zahlungseingänge zur Prüfung (uneindeutige Bank-Treffer; eindeutige sind schon auto-bezahlt)
+  const review=Array.isArray(state.bankReview)?state.bankReview:[];
+  if(review.length && liveConfigured()){ queued++;
+    const c=queueCard("","Zahlungseingänge",review.length);
+    review.slice(0,6).forEach(bt=>{
+      const cand=bt.orderName||"";
+      const row=el('<div class="q-row"><span class="q-main"><b>'+esc(fmtMoney(bt.amount,bt.currency))+'</b> <span class="muted">'+esc(bt.payerName||"—")+(bt.remittanceExcerpt?' · '+esc(bt.remittanceExcerpt.slice(0,40)):"")+(cand?' → '+esc(cand):"")+'</span></span></div>');
+      const grp=el('<span style="display:flex;gap:6px"></span>');
+      const okb=el('<button class="btn btn-sm btn-primary">Bezahlt</button>');
+      okb.onclick=()=>openBankResolve(bt);
+      const nob=el('<button class="btn btn-sm btn-ghost">Verwerfen</button>');
+      nob.onclick=async()=>{ if(!await confirmDialog("Verwerfen?","Diesen Zahlungseingang ignorieren (keine Bestellung bezahlt)?","Verwerfen")) return;
+        try{ await liveFetch("/admin/bank/review/"+encodeURIComponent(bt.dedupKey)+"/resolve",{method:"POST",body:JSON.stringify({status:"dismissed"})}); state.bankReview=review.filter(x=>x.dedupKey!==bt.dedupKey); saveBankReview(); toast("Verworfen"); render(); }
+        catch(e){ toast(e.message,5000); } };
+      grp.appendChild(okb); grp.appendChild(nob); row.appendChild(grp);
+      c.appendChild(row);
+    });
+    q.appendChild(c);
+  }
+
   const mahn=buckets["Mahnung fällig"]||[];
   if(mahn.length){ queued++;
     const c=queueCard("","Mahnung fällig",mahn.length);
@@ -949,6 +979,34 @@ function queueCard(ico,title,count){
   return c;
 }
 function kpi(label,val,sub){ return '<div class="kpi"><div class="k-label">'+esc(label)+'</div><div class="k-val">'+esc(val)+'</div><div class="k-sub">'+esc(sub||"")+'</div></div>'; }
+
+/* Zahlungseingang prüfen: Bestellung wählen und als bezahlt bestätigen. */
+function openBankResolve(bt){
+  // Kandidaten aus offenen Bestellungen mit exakt gleichem Betrag (Hilfestellung)
+  const cands=Object.values(state.orders).filter(o=>["pending","authorized","partially_paid"].includes(normStr(o.financialStatus)) && !o.cancelledAt && Math.round(num(o.totalPrice)*100)===Math.round(num(bt.amount)*100));
+  const chipHtml=cands.slice(0,8).map(o=>'<button type="button" class="btn btn-sm btn-ghost bcand" data-o="'+esc(o.name)+'">'+esc(o.name)+' · '+esc(o.customerName||"")+'</button>').join(" ");
+  const m=showModal('<h2>Zahlungseingang</h2>'+
+    '<div class="kv"><div class="k">Betrag</div><div class="v"><b>'+esc(fmtMoney(bt.amount,bt.currency))+'</b></div></div>'+
+    '<div class="kv"><div class="k">Überweiser</div><div class="v">'+esc(bt.payerName||"—")+'</div></div>'+
+    '<div class="kv"><div class="k">Verwendung</div><div class="v">'+esc(bt.remittanceExcerpt||"—")+'</div></div>'+
+    '<label class="field" style="margin-top:10px"><span>Als bezahlt markieren – Bestellnummer</span><input type="text" id="br-order" value="'+esc(bt.orderName||"")+'" placeholder="B1234"></label>'+
+    (chipHtml?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">'+chipHtml+'</div>':'<p class="tiny muted">Keine offene Bestellung mit exakt diesem Betrag gefunden – Nummer manuell eintragen.</p>')+
+    '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="go">Bezahlt bestätigen</button></div>',{sticky:true});
+  m.querySelectorAll(".bcand").forEach(b=>b.onclick=()=>{ m.querySelector("#br-order").value=b.getAttribute("data-o"); });
+  m.querySelector('[data-x=no]').onclick=closeModal;
+  const go=m.querySelector('[data-x=go]');
+  go.onclick=async()=>{
+    const orderName=m.querySelector("#br-order").value.trim().toUpperCase();
+    if(!/^B\d{3,6}$/.test(orderName)){ toast("Gültige Bestellnummer (z. B. B1234) eintragen"); return; }
+    go.disabled=true; go.innerHTML='<span class="spin"></span> Buche…';
+    try{
+      await liveFetch("/admin/bank/review/"+encodeURIComponent(bt.dedupKey)+"/resolve",{method:"POST",body:JSON.stringify({status:"confirmed",orderName})});
+      state.bankReview=(state.bankReview||[]).filter(x=>x.dedupKey!==bt.dedupKey); saveBankReview();
+      closeModal(); toast(orderName+" als bezahlt markiert ✓");
+      try{ await liveSyncAll(); }catch(e){} render();
+    }catch(e){ go.disabled=false; go.textContent="Bezahlt bestätigen"; toast(e.message,6000); }
+  };
+}
 
 function viewOrders(app){
   const now=Date.now(); const buckets=ordersByCategory(now);
@@ -1926,6 +1984,23 @@ function viewSettings(app){
   const biz=el('<div class="card"></div>'); biz.innerHTML='<h2 style="font-size:15px">Geschäftslogik</h2>';
   biz.appendChild(field("Mahnung fällig nach (Tagen)",'<input type="number" id="s-mahn" value="'+num(s.mahnungDays,7)+'" min="1" max="90">'));
   wrap.appendChild(biz);
+  // Bank (Zahlungsabgleich)
+  const bank=el('<div class="card"></div>'); bank.innerHTML='<h2 style="font-size:15px">Bank (Zahlungsabgleich)</h2><div id="bank-status" class="small muted" style="margin:6px 0 12px">…</div>';
+  const brow=el('<div class="row" style="gap:8px"></div>');
+  const connectBtn=el('<button class="btn btn-primary btn-sm">Bank verbinden</button>');
+  connectBtn.onclick=async()=>{ connectBtn.disabled=true; try{ const r=await liveFetch("/admin/bank/connect",{method:"POST"}); if(r&&r.url){ window.open(r.url,"_blank","noopener"); toast("Fenster geöffnet – bei der Sparkasse anmelden"); } else toast("Keine Verbindungs-URL erhalten"); }catch(e){ toast(e.message,6000); } finally{ connectBtn.disabled=false; } };
+  const syncBtn=el('<button class="btn btn-ghost btn-sm">Jetzt abgleichen</button>');
+  syncBtn.onclick=async()=>{ syncBtn.disabled=true; syncBtn.innerHTML='<span class="spin"></span>'; try{ const r=await liveFetch("/admin/bank/sync",{method:"POST"}); if(r&&r.skipped) toast("Vor <6h abgeglichen – Bank erlaubt nur ~4×/Tag"); else if(r&&r.needsReconsent) toast("Consent abgelaufen – bitte neu verbinden",6000); else if(r&&r.needsConnect) toast("Noch nicht verbunden"); else toast(((r&&r.autoPaid)?r.autoPaid.length:0)+" automatisch bezahlt · "+((r&&r.review)||0)+" zu prüfen",5000); try{await liveSyncAll();}catch(e){} render(); }catch(e){ syncBtn.disabled=false; syncBtn.textContent="Jetzt abgleichen"; toast(e.message,6000); } };
+  brow.appendChild(connectBtn); brow.appendChild(syncBtn); bank.appendChild(brow);
+  const fillBank=(bs)=>{ const el2=bank.querySelector("#bank-status"); if(!el2) return;
+    if(!bs||!bs.configured){ el2.innerHTML='Enable Banking im Backend noch nicht eingerichtet (Schlüssel fehlen).'; return; }
+    if(!bs.connected){ el2.innerHTML='Nicht verbunden.'+(bs.needsReconsent?' <b style="color:var(--danger)">Consent abgelaufen.</b>':''); return; }
+    const exp=bs.daysUntilExpiry; const warn=(exp!=null&&exp<14);
+    el2.innerHTML='Verbunden: '+esc(bs.ibanMasked||'')+(bs.lastSyncAt?' · letzter Abgleich '+esc(fmtDateTime(new Date(bs.lastSyncAt).getTime())):' · noch nicht abgeglichen')+(exp!=null?' · Consent läuft in '+exp+' Tagen'+(warn?' <b style="color:var(--danger)">– bald erneuern</b>':''):'')+(bs.dryRun?' · <b>Testmodus</b>':'');
+  };
+  if(!liveConfigured()){ bank.querySelector("#bank-status").textContent="Zuerst Backend-URL + Admin-Token speichern."; }
+  else { if(state.bankStatus) fillBank(state.bankStatus); liveFetch("/admin/bank/status").then(bs=>{ state.bankStatus=bs; fillBank(bs); }).catch(()=>{ const e2=bank.querySelector("#bank-status"); if(e2) e2.textContent="Status nicht abrufbar."; }); }
+  wrap.appendChild(bank);
   // save
   const saveBtn=el('<button class="btn btn-primary btn-block" style="margin-top:4px">Speichern</button>');
   saveBtn.onclick=()=>{ s.apiKey=wrap.querySelector("#s-key").value.trim(); s.model=wrap.querySelector("#s-model").value; s.backendUrl=wrap.querySelector("#s-url").value.trim(); s.adminToken=wrap.querySelector("#s-token").value.trim(); s.mahnungDays=Math.max(1,num(wrap.querySelector("#s-mahn").value,7)); saveSettings(); toast("Gespeichert"); renderChrome(parseRoute().name); };
