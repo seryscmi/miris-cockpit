@@ -178,6 +178,30 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .kpi .k-val{font-family:var(--serif);font-size:26px;font-weight:600;margin-top:6px;letter-spacing:.02em}
 .kpi .k-sub{font-size:11px;color:var(--ink2);margin-top:2px}
 
+/* Home-Gruppen (Shopify-artige Bereiche) */
+.home-group{margin-top:26px}
+.home-group:first-of-type{margin-top:6px}
+.home-group > h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2);margin:0 2px 10px}
+
+/* Daten-Tabelle (Resource-Liste) — trägt Produkte/Rabatte/Analytics */
+.dtable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface)}
+.dtable{width:100%;border-collapse:collapse;font-size:13px}
+.dtable th,.dtable td{padding:11px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+.dtable th{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);font-weight:800}
+.dtable td.num,.dtable th.num{text-align:right;font-variant-numeric:tabular-nums}
+.dtable tbody tr:last-child td{border-bottom:none}
+.dtable tbody tr.clickable{cursor:pointer}
+.dtable tbody tr.clickable:hover{background:var(--surface2)}
+.dtable .t-empty{padding:22px 14px;text-align:center;color:var(--ink2);white-space:normal}
+
+/* Mini-Balkendiagramm (kein Framework) */
+.bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding:6px 0 0}
+.bars .bar{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.bars .bar > i{display:block;background:var(--ink);min-height:2px}
+.bars .bar:hover > i{background:var(--accent);opacity:.75}
+.bar-axis{display:flex;gap:3px;margin-top:6px}
+.bar-axis > span{flex:1 1 0;min-width:0;text-align:center;font-size:9px;color:var(--ink2);white-space:nowrap;overflow:hidden}
+
 /* Heute: Stat-Chips + Aktions-Warteschlange */
 .stat-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
 .stat-chip{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;min-width:106px;padding:14px 16px;background:var(--surface);text-decoration:none;transition:box-shadow .18s cubic-bezier(.22,1,.36,1)}
@@ -826,6 +850,7 @@ const NAV_ITEMS=[
   {name:"home",label:"Start",ico:"◪",short:"Start"},
   {name:"bestellungen",label:"Bestellungen",ico:"▦",short:"Orders"},
   {name:"kunden",label:"Kunden",ico:"◎",short:"Kunden"},
+  {name:"analytics",label:"Analytics",ico:"▥",short:"Analytics"},
   {name:"anliegen",label:"Inbox",ico:"✉",short:"Inbox"},
   {name:"chats",label:"Chats",ico:"❋",short:"Chats"},
   {name:"wissensluecken",label:"KI-Wissenslücken",ico:"◐",short:"KI-Lücken"},
@@ -837,7 +862,7 @@ const NAV_ITEMS=[
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
+const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, analytics:viewAnalytics, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
 function viewImportRedirect(){ nav("#/einstellungen"); } // Alias: alte Lesezeichen/Links
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
@@ -877,7 +902,7 @@ function openMoreSheet(names,counts){
     list.appendChild(row);
   });
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",analytics:"▥",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
@@ -890,29 +915,161 @@ function pageHead(title,sub){ return '<div class="page-head"><h1>'+esc(title)+'<
 function viewHome(app){
   const wrap=el('<div></div>');
   const counts={ bestellungen:mahnungFaelligCount(), anliegen:openAnliegenCount(), wissensluecken:openGapsCount(), dsgvo:openImagesCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0) };
-  const tiles=[
-    {name:"bestellungen",label:"Bestellungen"},
-    {name:"kunden",label:"Kunden"},
-    {name:"anliegen",label:"Inbox"},
-    {name:"chats",label:"Chats"},
-    {name:"wissensluecken",label:"Wissenslücken"},
-    {name:"kalender",label:"Kalender"},
-    {name:"dsgvo",label:"DSGVO"},
-    {name:"bank",label:"Bank"},
-    {name:"system",label:"System & Kosten"},
-    {name:"einstellungen",label:"Einstellungen"},
+  // Shopify-artige Bereiche
+  const groups=[
+    ["Verkauf",[
+      {name:"bestellungen",label:"Bestellungen"},
+      {name:"kunden",label:"Kunden"},
+      {name:"analytics",label:"Analytics"},
+    ]],
+    ["Kundenservice",[
+      {name:"anliegen",label:"Inbox"},
+      {name:"chats",label:"Chats"},
+      {name:"wissensluecken",label:"Wissenslücken"},
+      {name:"dsgvo",label:"DSGVO"},
+    ]],
+    ["Betrieb",[
+      {name:"bank",label:"Bank"},
+      {name:"kalender",label:"Kalender"},
+      {name:"system",label:"System & Kosten"},
+      {name:"einstellungen",label:"Einstellungen"},
+    ]],
   ];
-  const grid=el('<div class="home-grid"></div>');
-  grid.innerHTML=tiles.map(t=>{
-    const c=counts[t.name]||0;
-    return '<a class="home-tile" href="#/'+t.name+'">'+
-      (c?'<span class="home-badge">'+c+'</span>':'')+
-      '<span class="home-ico">'+navIco(t.name)+'</span>'+
-      '<span class="home-label">'+esc(t.label)+'</span></a>';
-  }).join("");
-  wrap.appendChild(grid);
+  groups.forEach(([title,tiles])=>{
+    const g=el('<div class="home-group"></div>'); g.innerHTML='<h2>'+esc(title)+'</h2>';
+    const grid=el('<div class="home-grid"></div>');
+    grid.innerHTML=tiles.map(t=>{ const c=counts[t.name]||0;
+      return '<a class="home-tile" href="#/'+t.name+'">'+
+        (c?'<span class="home-badge">'+c+'</span>':'')+
+        '<span class="home-ico">'+navIco(t.name)+'</span>'+
+        '<span class="home-label">'+esc(t.label)+'</span></a>';
+    }).join("");
+    g.appendChild(grid); wrap.appendChild(g);
+  });
   const fresh=state.importlog.lastLiveAt||state.importlog.lastSnapshotAt;
   if(fresh) wrap.appendChild(el('<p class="tiny muted" style="text-align:center;margin-top:22px">Stand '+esc(fmtDateTime(fresh))+(liveConfigured()?" · Live":"")+'</p>'));
+  app.appendChild(wrap);
+}
+
+/* ---------- Wiederverwendbare Daten-Tabelle (Resource-Liste) ----------
+   columns: [{label, key?, align?:"right", render?(row)->String|Node, html?}]
+   opts: { empty?, onRow?(row) } */
+function dataTable(columns, rows, opts){
+  opts=opts||{};
+  const wrap=el('<div class="dtable-wrap"></div>');
+  const t=el('<table class="dtable"></table>');
+  t.innerHTML='<thead><tr>'+columns.map(c=>'<th class="'+(c.align==="right"?"num":"")+'">'+esc(c.label)+'</th>').join("")+'</tr></thead>';
+  const tb=el('<tbody></tbody>');
+  if(!rows||!rows.length){
+    tb.appendChild(el('<tr><td class="t-empty" colspan="'+columns.length+'">'+esc(opts.empty||"Keine Daten")+'</td></tr>'));
+  } else {
+    rows.forEach(row=>{
+      const tr=el('<tr'+(opts.onRow?' class="clickable"':'')+'></tr>');
+      columns.forEach(c=>{
+        const td=el('<td class="'+(c.align==="right"?"num":"")+'"></td>');
+        const val=c.render?c.render(row):(c.key?row[c.key]:"");
+        if(val instanceof Node) td.appendChild(val);
+        else td.innerHTML=c.html?String(val==null?"":val):esc(String(val==null?"":val));
+        tr.appendChild(td);
+      });
+      if(opts.onRow) tr.onclick=()=>opts.onRow(row);
+      tb.appendChild(tr);
+    });
+  }
+  t.appendChild(tb); wrap.appendChild(t); return wrap;
+}
+
+/* ---------- Mini-Balkendiagramm ---------- */
+function barChart(series, fmt){
+  fmt=fmt||(v=>String(v));
+  const max=Math.max(1, ...series.map(s=>num(s.value,0)));
+  const wrap=el('<div></div>');
+  const bars=el('<div class="bars"></div>');
+  series.forEach(s=>{ const h=Math.round(num(s.value,0)/max*100);
+    bars.appendChild(el('<div class="bar" title="'+esc(s.label+": "+fmt(num(s.value,0)))+'"><i style="height:'+h+'%"></i></div>')); });
+  wrap.appendChild(bars);
+  const n=series.length, step=Math.max(1,Math.ceil(n/7));
+  const axis=el('<div class="bar-axis"></div>');
+  series.forEach((s,i)=>{ axis.appendChild(el('<span>'+((i%step===0||i===n-1)?esc(s.axis||s.label):"")+'</span>')); });
+  wrap.appendChild(axis); return wrap;
+}
+
+/* ---------- Analytics — aus den geladenen Bestellungen ---------- */
+function fmtFinStatus(s){ const m={paid:"Bezahlt",pending:"Ausstehend",authorized:"Autorisiert",partially_paid:"Teilbezahlt",refunded:"Erstattet",partially_refunded:"Teilw. erstattet",voided:"Storniert",unbezahlt:"Unbezahlt"}; return m[s]||s||"Unbezahlt"; }
+function buildAnalyticsSeries(paid, rangeKey, now){
+  now=now||Date.now();
+  if(rangeKey==="12m"||rangeKey==="all"){
+    const base=new Date(now); const out=[];
+    for(let i=11;i>=0;i--){ const m=new Date(base.getFullYear(), base.getMonth()-i, 1);
+      const s=m.getTime(), e=new Date(m.getFullYear(), m.getMonth()+1, 1).getTime();
+      const v=paid.filter(o=>o.createdAt>=s&&o.createdAt<e).reduce((a,o)=>a+num(o.totalPrice,0),0);
+      out.push({label:m.toLocaleDateString("de-DE",{month:"long",year:"numeric"}), axis:m.toLocaleDateString("de-DE",{month:"short"}), value:v}); }
+    return out;
+  }
+  const days=rangeKey==="7d"?7:30; const start0=new Date(now); start0.setHours(0,0,0,0); const out=[];
+  for(let i=days-1;i>=0;i--){ const d=new Date(start0); d.setDate(start0.getDate()-i);
+    const s=d.getTime(), e=s+86400000;
+    const v=paid.filter(o=>o.createdAt>=s&&o.createdAt<e).reduce((a,o)=>a+num(o.totalPrice,0),0);
+    const lbl=d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+    out.push({label:lbl, axis:lbl, value:v}); }
+  return out;
+}
+function analyticsData(rangeKey, now){
+  now=now||Date.now();
+  const spans={"7d":7*86400000,"30d":30*86400000,"12m":366*86400000,"all":Infinity};
+  const span=spans[rangeKey]||spans["30d"]; const cutoff=span===Infinity?0:now-span;
+  const all=Object.values(state.orders).filter(o=>!o.cancelledAt && o.createdAt>=cutoff);
+  const paid=all.filter(o=>normStr(o.financialStatus)==="paid");
+  const umsatz=paid.reduce((a,o)=>a+num(o.totalPrice,0),0);
+  const aov=paid.length?umsatz/paid.length:0;
+  const prod={};
+  paid.forEach(o=>(o.lineItems||[]).forEach(li=>{ const key=str(li.title,200)||"—";
+    (prod[key]||(prod[key]={title:key,qty:0,orders:0})); prod[key].qty+=num(li.quantity,1); prod[key].orders+=1; }));
+  const bestseller=Object.values(prod).sort((a,b)=>b.qty-a.qty);
+  const status={}; all.forEach(o=>{ const s=normStr(o.financialStatus)||"unbezahlt"; status[s]=(status[s]||0)+1; });
+  return { umsatz, aov, ordersN:all.length, paidN:paid.length, bestseller, status, series:buildAnalyticsSeries(paid,rangeKey,now) };
+}
+function viewAnalytics(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Analytics","Umsatz & Bestellungen aus deinen Shopify-Daten");
+  if(Object.keys(state.orders).length===0){
+    wrap.appendChild(emptyBlock("Noch keine Daten","Verbinde das Backend und synchronisiere — dann erscheinen hier Umsatz, Bestellungen und Bestseller.","#/einstellungen","Einrichten"));
+    app.appendChild(wrap); return;
+  }
+  const rk=state.ui.analyticsRange||"30d";
+  const ranges=[["7d","7 Tage"],["30d","30 Tage"],["12m","12 Monate"],["all","Gesamt"]];
+  const chipRow=el('<div class="chip-row"></div>');
+  ranges.forEach(([k,l])=>{ const c=el('<button class="f-chip'+(k===rk?" on":"")+'">'+l+'</button>'); c.onclick=()=>{ state.ui.analyticsRange=k; render(); }; chipRow.appendChild(c); });
+  wrap.appendChild(chipRow);
+
+  const d=analyticsData(rk);
+  const k=el('<div class="kpis" style="margin-top:6px"></div>');
+  k.innerHTML=kpi("Umsatz",fmtMoney(d.umsatz),d.paidN+" bezahlt")
+    +kpi("Bestellungen",String(d.ordersN),"im Zeitraum")
+    +kpi("Ø Bestellwert",fmtMoney(d.aov),"pro bezahlt")
+    +kpi("Bezahlt-Quote",(d.ordersN?Math.round(d.paidN/d.ordersN*100):0)+" %","der Bestellungen");
+  wrap.appendChild(k);
+
+  const chartC=el('<div class="card" style="margin-top:14px"></div>');
+  chartC.innerHTML='<h2 style="font-size:14px;margin-bottom:12px">Umsatz-Verlauf</h2>';
+  chartC.appendChild(barChart(d.series, v=>fmtMoney(v)));
+  wrap.appendChild(chartC);
+
+  const bsC=el('<div class="card" style="margin-top:14px;padding:0"></div>');
+  bsC.innerHTML='<h2 style="font-size:14px;padding:20px 20px 12px">Bestseller</h2>';
+  bsC.appendChild(dataTable(
+    [{label:"Produkt / Variante",key:"title"},{label:"Verkauft",key:"qty",align:"right"}],
+    d.bestseller.slice(0,15),
+    {empty:"Noch keine bezahlten Bestellungen im Zeitraum"}));
+  wrap.appendChild(bsC);
+
+  const stC=el('<div class="card" style="margin-top:14px"></div>');
+  stC.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Zahlungsstatus</h2>';
+  const stKeys=Object.keys(d.status);
+  if(!stKeys.length) stC.appendChild(el('<p class="tiny muted">Keine Bestellungen im Zeitraum.</p>'));
+  else stKeys.sort((a,b)=>d.status[b]-d.status[a]).forEach(s=>stC.appendChild(el(kv(fmtFinStatus(s),String(d.status[s])))));
+  wrap.appendChild(stC);
+
+  wrap.appendChild(el('<p class="tiny muted" style="margin-top:14px">Basiert auf den geladenen Bestellungen (aktuell die letzten bis zu 250). Eine eigene Auswertung für ältere Zeiträume kommt in einer späteren Stufe.</p>'));
   app.appendChild(wrap);
 }
 
