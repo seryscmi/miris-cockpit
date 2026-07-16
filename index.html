@@ -2221,7 +2221,8 @@ function field(label,inner){ return el('<label class="field"><span>'+esc(label)+
 function exportBackup(){
   const dump={ schemaVersion:SCHEMA_VERSION, exportedAt:new Date().toISOString(),
     settings:Object.assign({},state.settings,{apiKey:"",adminToken:""}),
-    orders:state.orders, anliegen:state.anliegen, gaps:state.gaps, images:state.images, days:state.days };
+    orders:state.orders, anliegen:state.anliegen, gaps:state.gaps, images:state.images, days:state.days,
+    systemData:state.systemData };
   const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="miris-cockpit-backup-"+todayStr()+".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   toast("Backup exportiert");
@@ -2233,8 +2234,9 @@ function importBackup(file){
     if(d.gaps) state.gaps=mapSanitize(d.gaps,sanitizeGap,"id");
     if(d.images) state.images=mapSanitize(d.images,sanitizeImage,"id");
     if(d.days) state.days=sanitizeDays(d.days);
+    if(d.systemData && typeof d.systemData==="object" && Array.isArray(d.systemData.abos)) state.systemData=d.systemData;
     if(d.settings) state.settings=Object.assign({},state.settings,d.settings,{apiKey:state.settings.apiKey,adminToken:state.settings.adminToken});
-    persist(["orders","anliegen","gaps","images","days","settings"]); flushSaves(); toast("Backup importiert"); render();
+    persist(["orders","anliegen","gaps","images","days","settings","systemData"]); flushSaves(); toast("Backup importiert"); render();
   }catch(e){ toast("Ungültiges Backup",4000); } }; rd.readAsText(file);
 }
 
