@@ -2089,24 +2089,19 @@ const SYSTEM_SERVICES=[
 ];
 function defaultSystemData(){
   return {
-    abos:[
-      {name:"Shopify",eur:50,note:"Shop + Kasse",unsure:true},
-      {name:"Klaviyo",eur:0,note:"E-Mails/Flows – Tarif prüfen",unsure:true},
-      {name:"Google Workspace",eur:17,note:"2 Postfächer .de/.eu",unsure:true},
-      {name:"Lexware Office",eur:39.15,note:"32,90 netto",unsure:false},
-      {name:"Händlerbund",eur:15.35,note:"Rechtstexte",unsure:false},
-      {name:"Elfsight",eur:5,note:"Widget – Betrag prüfen",unsure:true},
-      {name:"STRATO",eur:0,note:"Domain/Hosting?",unsure:true},
-      {name:"Canva",eur:0,note:"Design?",unsure:true},
-      {name:"Domains (m-iris.de/.eu)",eur:0,note:"Registrar",unsure:true},
-      {name:"Render · Neon · Cloudinary · GitHub · cron-job.org · Enable Banking",eur:0,note:"aktuell kostenlose Stufen",unsure:false},
-    ],
+    v:2,
+    abos:[], // eigene Fixkosten – der Nutzer legt sie selbst per „+ Fixkosten" an (Name · Betrag · monatlich/jährlich)
     calc:{ preis:49.99, material:0, verpackung:0, versand:0, gebuehrPct:2.5, bestellungen:30 },
   };
 }
 function systemState(){
   if(!state.systemData || !Array.isArray(state.systemData.abos) || !state.systemData.calc){ state.systemData=defaultSystemData(); saveSystemData(); }
-  return state.systemData;
+  const sd=state.systemData;
+  // Migration auf v2: alte Vorgabeliste einmalig entfernen (Nutzer pflegt eigene Posten).
+  if(sd.v!==2){ sd.abos=[]; sd.v=2; saveSystemData(); }
+  // Sicherheitsnetz: jede Zeile hat name/eur/interval (monat|jahr).
+  sd.abos.forEach(x=>{ if(typeof x.name!=="string") x.name=""; if(x.interval!=="jahr"&&x.interval!=="monat") x.interval="monat"; });
+  return sd;
 }
 let _sysSaveT=null; function saveSystemDataSoon(){ clearTimeout(_sysSaveT); _sysSaveT=setTimeout(saveSystemData,400); }
 function viewSystem(app){
@@ -2118,16 +2113,35 @@ function viewSystem(app){
   SYSTEM_SERVICES.forEach(sv=>mapC.appendChild(el('<div class="q-row"><span class="q-main"><b>'+esc(sv.n)+'</b> <span class="muted">'+esc(sv.d)+'</span></span><a class="btn btn-sm btn-ghost" href="'+safeUrl(sv.u)+'" target="_blank" rel="noopener">öffnen ↗</a></div>')));
   wrap.appendChild(mapC);
 
-  // 2) Abo-Kosten
+  // 2) Fixkosten – selbst verwaltet (Name · Betrag · monatlich/jährlich)
   const costC=el('<div class="card"></div>');
-  costC.innerHTML='<div class="row"><h2 style="font-size:14px">Abo-Kosten / Monat</h2><span class="spacer"></span><b id="abo-sum" style="font-variant-numeric:tabular-nums"></b></div><p class="tiny muted" style="margin:6px 0 12px">Gelb = trag deinen echten Betrag ein. Anthropic ist nutzungsabhängig (kein festes Abo).</p>';
-  const recalcSum=()=>{ const sum=sd.abos.reduce((a,x)=>a+num(x.eur,0),0); const el2=costC.querySelector("#abo-sum"); if(el2) el2.textContent=fmtMoney(sum)+" · "+fmtMoney(sum*12)+"/Jahr"; return sum; };
-  sd.abos.forEach((row)=>{
-    const r=el('<div class="kv" style="align-items:center;gap:10px"><div class="k" style="flex:1">'+esc(row.name)+(row.note?' <span class="tiny muted">('+esc(row.note)+')</span>':'')+'</div></div>');
-    const inp=el('<input type="number" step="0.01" min="0" value="'+num(row.eur,0)+'" style="max-width:110px;text-align:right'+(row.unsure?';background:#faf3df':'')+'">');
-    inp.oninput=()=>{ row.eur=num(inp.value,0); row.unsure=false; inp.style.background=""; recalcSum(); recompute(); saveSystemDataSoon(); };
-    r.appendChild(inp); costC.appendChild(r);
-  });
+  costC.innerHTML='<div class="row"><h2 style="font-size:14px">Fixkosten</h2><span class="spacer"></span><b id="abo-sum" style="font-variant-numeric:tabular-nums"></b></div>';
+  const listWrap=el('<div id="fix-list"></div>'); costC.appendChild(listWrap);
+  const emptyHint=el('<p class="tiny muted" style="margin:10px 0">Noch keine Fixkosten. Tippe unten auf <b>+ Fixkosten</b>, trag Name und Betrag ein und wähle <b>monatlich</b> oder <b>jährlich</b>.</p>');
+  const monthlyOf=x=>x.interval==="jahr"?num(x.eur,0)/12:num(x.eur,0);
+  const recalcSum=()=>{ const sum=sd.abos.reduce((a,x)=>a+monthlyOf(x),0); const el2=costC.querySelector("#abo-sum"); if(el2) el2.textContent=fmtMoney(sum)+" / Mon · "+fmtMoney(sum*12)+" / Jahr"; return sum; };
+  function renderFixRow(row){
+    const r=el('<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0;border-top:1px solid var(--line)"></div>');
+    const nameI=el('<input type="text" placeholder="Bezeichnung (z. B. Shopify)" value="'+esc(row.name||"")+'" style="flex:1 1 100%">');
+    nameI.oninput=()=>{ row.name=nameI.value; saveSystemDataSoon(); };
+    const eurI=el('<input type="number" step="0.01" min="0" inputmode="decimal" value="'+num(row.eur,0)+'" style="flex:1 1 90px;max-width:110px;text-align:right">');
+    const intS=el('<select style="flex:0 0 auto;width:auto"><option value="monat">monatlich</option><option value="jahr">jährlich</option></select>');
+    intS.value=row.interval==="jahr"?"jahr":"monat";
+    const hint=el('<span class="tiny muted" style="flex:1 1 100%;text-align:right"></span>');
+    const paintHint=()=>{ hint.textContent = row.interval==="jahr" ? "= "+fmtMoney(num(row.eur,0)/12)+" / Monat" : ""; };
+    const delB=el('<button class="btn btn-sm btn-ghost" title="Entfernen" aria-label="Entfernen" style="flex:0 0 auto;font-size:18px;line-height:1">×</button>');
+    eurI.oninput=()=>{ row.eur=num(eurI.value,0); recalcSum(); recompute(); paintHint(); saveSystemDataSoon(); };
+    intS.onchange=()=>{ row.interval=intS.value==="jahr"?"jahr":"monat"; recalcSum(); recompute(); paintHint(); saveSystemDataSoon(); };
+    delB.onclick=()=>{ const i=sd.abos.indexOf(row); if(i>=0) sd.abos.splice(i,1); r.remove(); if(!sd.abos.length) listWrap.appendChild(emptyHint); recalcSum(); recompute(); saveSystemDataSoon(); };
+    paintHint();
+    r.appendChild(nameI); r.appendChild(eurI); r.appendChild(intS); r.appendChild(delB); r.appendChild(hint);
+    return r;
+  }
+  if(!sd.abos.length){ listWrap.appendChild(emptyHint); } else { sd.abos.forEach(row=>listWrap.appendChild(renderFixRow(row))); }
+  const addB=el('<button class="btn btn-sm btn-block" style="margin-top:14px">+ Fixkosten</button>');
+  addB.onclick=()=>{ const row={name:"",eur:0,interval:"monat"}; sd.abos.push(row); if(sd.abos.length===1) listWrap.innerHTML=""; const rowEl=renderFixRow(row); listWrap.appendChild(rowEl); recalcSum(); recompute(); saveSystemDataSoon(); const inp=rowEl.querySelector('input[type=text]'); if(inp) inp.focus(); };
+  costC.appendChild(addB);
+  costC.appendChild(el('<p class="tiny muted" style="margin:12px 0 0">Manche Kosten sind monatlich, manche jährlich – wähl es pro Posten. Jährliches wird für die Summe automatisch auf den Monat umgerechnet. Anthropic (KI) ist nutzungsabhängig, kein Fixkosten-Abo.</p>'));
   wrap.appendChild(costC);
 
   // 3) Margen-Rechner
@@ -2137,7 +2151,7 @@ function viewSystem(app){
   [["Verkaufspreis (€)","preis"],["Materialkosten pro Set (€)","material"],["Verpackung pro Set (€)","verpackung"],["Versandkosten pro Bestellung (€)","versand"],["Zahlungsgebühr (%)","gebuehrPct"],["Bestellungen pro Monat","bestellungen"]].forEach(([l,k])=>calcC.appendChild(fld(l,k)));
   const out=el('<div style="margin-top:12px"></div>'); calcC.appendChild(out);
   function recompute(){
-    const fix=sd.abos.reduce((a,x)=>a+num(x.eur,0),0);
+    const fix=sd.abos.reduce((a,x)=>a+(x.interval==="jahr"?num(x.eur,0)/12:num(x.eur,0)),0);
     const gebuehr=num(c.preis)*num(c.gebuehrPct)/100;
     const db=num(c.preis)-num(c.material)-num(c.verpackung)-num(c.versand)-gebuehr;
     const be=db>0?Math.ceil(fix/db):null;
