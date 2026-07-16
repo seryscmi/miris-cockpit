@@ -335,7 +335,7 @@ const SCHEMA_VERSION = 1;
 const K = {
   meta:"miris.meta", settings:"miris.settings", orders:"miris.orders",
   anliegen:"miris.anliegen", gaps:"miris.gaps", images:"miris.images",
-  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails", bankReview:"miris.bankReview"
+  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails", bankReview:"miris.bankReview", systemData:"miris.systemData"
 };
 const DEFAULT_SETTINGS = {
   apiKey:"", model:"claude-opus-4-8", backendUrl:"", adminToken:"",
@@ -463,6 +463,7 @@ const state = {
   dismissed:{},   // dauerhaft im Cockpit gelöschte Anliegen-IDs (kommen beim Sync nicht zurück)
   sentMails:{},   // Sendeprotokoll je Kunde (nur lokal; Klaviyo ist die autoritative Historie)
   bankReview:[],  // Zahlungseingänge zur manuellen Prüfung (Server-Wahrheit, gespiegelt)
+  systemData:null, // System-Landkarte + Abo-Kosten + Margen-Rechner (lokal editierbar)
   bankStatus:null,// letzter Bank-Status (RAM-Spiegel; im importlog gehalten)
   ui:{ ordersView:"kanban", ordersFilter:"", ordersQuery:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null,
        kundenQuery:"", chatQuery:"", chatFrom:"", chatTo:"", chatResults:null }   // Chats nur im RAM (Datenschutz)
@@ -483,6 +484,7 @@ function loadState(){
   const dm = Store.get(K.dismissed,{}); state.dismissed = (dm && typeof dm==="object" && !Array.isArray(dm)) ? dm : {};
   const sm = Store.get(K.sentMails,{}); state.sentMails = (sm && typeof sm==="object" && !Array.isArray(sm)) ? sm : {};
   const brv = Store.get(K.bankReview,[]); state.bankReview = Array.isArray(brv) ? brv : [];
+  const syd = Store.get(K.systemData,null); state.systemData = (syd && typeof syd==="object") ? syd : null;
   // Speicher-Hygiene: Altlasten automatisch ausmisten
   try{
     const now=Date.now(); let prunedI=0, prunedD=0;
@@ -508,6 +510,7 @@ function saveDays(){ persist(["days"]); } function saveSettings(){ persist(["set
 function saveImportlog(){ persist(["importlog"]); } function saveDismissed(){ persist(["dismissed"]); }
 function saveSentMails(){ persist(["sentMails"]); }
 function saveBankReview(){ persist(["bankReview"]); }
+function saveSystemData(){ persist(["systemData"]); }
 
 /* ---------- Helfer ---------- */
 function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
@@ -827,11 +830,12 @@ const NAV_ITEMS=[
   {name:"kalender",label:"Kalender",ico:"▤",short:"Plan"},
   {name:"dsgvo",label:"DSGVO",ico:"◉",short:"DSGVO"},
   {name:"bank",label:"Bank",ico:"€",short:"Bank"},
+  {name:"system",label:"System & Kosten",ico:"◈",short:"System"},
   {name:"einstellungen",label:"Einstellungen",ico:"⚙",short:"Setup"}
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, import:viewImportRedirect, einstellungen:viewSettings };
+const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
 function viewImportRedirect(){ nav("#/einstellungen"); } // Alias: alte Lesezeichen/Links
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
@@ -871,7 +875,7 @@ function openMoreSheet(names,counts){
     list.appendChild(row);
   });
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
@@ -893,6 +897,7 @@ function viewHome(app){
     {name:"kalender",label:"Kalender"},
     {name:"dsgvo",label:"DSGVO"},
     {name:"bank",label:"Bank"},
+    {name:"system",label:"System & Kosten"},
     {name:"einstellungen",label:"Einstellungen"},
   ];
   const grid=el('<div class="home-grid"></div>');
@@ -2063,6 +2068,89 @@ function openGlobalSearch(){
   inp.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(run,250); });
   inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ clearTimeout(t); run(); } });
   inp.focus();
+}
+
+/* ======================================================================
+   System & Kosten — eine Kachel: Landkarte + Abo-Kosten + Margen-Rechner
+   ====================================================================== */
+const SYSTEM_SERVICES=[
+  {n:"Shopify",d:"Dein Shop, Kasse, Bestellungen",u:"https://admin.shopify.com"},
+  {n:"Mary / Farbvorschau-App",d:"KI-Chat + Farbvorschau + Reparatur (läuft auf Render)",u:"https://dashboard.render.com"},
+  {n:"Cockpit (diese App)",d:"Deine Steuerzentrale (GitHub Pages)",u:"https://github.com/seryscmi/miris-cockpit"},
+  {n:"Cockpit-Backend",d:"Verbindet Cockpit mit Shopify / Bank / Datenbank (Render)",u:"https://dashboard.render.com"},
+  {n:"Datenbank (Neon)",d:"Chats, Anliegen, Bank-Daten",u:"https://console.neon.tech"},
+  {n:"Cloudinary",d:"Speichert die Augenbilder",u:"https://console.cloudinary.com"},
+  {n:"Klaviyo",d:"Alle automatischen E-Mails + Marketing",u:"https://www.klaviyo.com"},
+  {n:"Anthropic (Claude)",d:"Die KI hinter Mary (nutzungsabhängig)",u:"https://console.anthropic.com"},
+  {n:"Enable Banking",d:"Bank-Zahlungsabgleich (PSD2)",u:"https://enablebanking.com/cp"},
+  {n:"cron-job.org",d:"Zeitpläne (Bank-Abgleich, Aufräum-Jobs)",u:"https://console.cron-job.org"},
+  {n:"Lexware Office",d:"Buchhaltung / EÜR",u:"https://app.lexoffice.de"},
+  {n:"Google Workspace",d:"Deine E-Mail-Postfächer",u:"https://admin.google.com"},
+];
+function defaultSystemData(){
+  return {
+    abos:[
+      {name:"Shopify",eur:50,note:"Shop + Kasse",unsure:true},
+      {name:"Klaviyo",eur:0,note:"E-Mails/Flows – Tarif prüfen",unsure:true},
+      {name:"Google Workspace",eur:17,note:"2 Postfächer .de/.eu",unsure:true},
+      {name:"Lexware Office",eur:39.15,note:"32,90 netto",unsure:false},
+      {name:"Händlerbund",eur:15.35,note:"Rechtstexte",unsure:false},
+      {name:"Elfsight",eur:5,note:"Widget – Betrag prüfen",unsure:true},
+      {name:"STRATO",eur:0,note:"Domain/Hosting?",unsure:true},
+      {name:"Canva",eur:0,note:"Design?",unsure:true},
+      {name:"Domains (m-iris.de/.eu)",eur:0,note:"Registrar",unsure:true},
+      {name:"Render · Neon · Cloudinary · GitHub · cron-job.org · Enable Banking",eur:0,note:"aktuell kostenlose Stufen",unsure:false},
+    ],
+    calc:{ preis:49.99, material:0, verpackung:0, versand:0, gebuehrPct:2.5, bestellungen:30 },
+  };
+}
+function systemState(){
+  if(!state.systemData || !Array.isArray(state.systemData.abos) || !state.systemData.calc){ state.systemData=defaultSystemData(); saveSystemData(); }
+  return state.systemData;
+}
+let _sysSaveT=null; function saveSystemDataSoon(){ clearTimeout(_sysSaveT); _sysSaveT=setTimeout(saveSystemData,400); }
+function viewSystem(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("System & Kosten","");
+  const sd=systemState();
+
+  // 1) System-Landkarte
+  const mapC=sectionCard("System-Landkarte – was läuft wo");
+  SYSTEM_SERVICES.forEach(sv=>mapC.appendChild(el('<div class="q-row"><span class="q-main"><b>'+esc(sv.n)+'</b> <span class="muted">'+esc(sv.d)+'</span></span><a class="btn btn-sm btn-ghost" href="'+safeUrl(sv.u)+'" target="_blank" rel="noopener">öffnen ↗</a></div>')));
+  wrap.appendChild(mapC);
+
+  // 2) Abo-Kosten
+  const costC=el('<div class="card"></div>');
+  costC.innerHTML='<div class="row"><h2 style="font-size:14px">Abo-Kosten / Monat</h2><span class="spacer"></span><b id="abo-sum" style="font-variant-numeric:tabular-nums"></b></div><p class="tiny muted" style="margin:6px 0 12px">Gelb = trag deinen echten Betrag ein. Anthropic ist nutzungsabhängig (kein festes Abo).</p>';
+  const recalcSum=()=>{ const sum=sd.abos.reduce((a,x)=>a+num(x.eur,0),0); const el2=costC.querySelector("#abo-sum"); if(el2) el2.textContent=fmtMoney(sum)+" · "+fmtMoney(sum*12)+"/Jahr"; return sum; };
+  sd.abos.forEach((row)=>{
+    const r=el('<div class="kv" style="align-items:center;gap:10px"><div class="k" style="flex:1">'+esc(row.name)+(row.note?' <span class="tiny muted">('+esc(row.note)+')</span>':'')+'</div></div>');
+    const inp=el('<input type="number" step="0.01" min="0" value="'+num(row.eur,0)+'" style="max-width:110px;text-align:right'+(row.unsure?';background:#faf3df':'')+'">');
+    inp.oninput=()=>{ row.eur=num(inp.value,0); row.unsure=false; inp.style.background=""; recalcSum(); recompute(); saveSystemDataSoon(); };
+    r.appendChild(inp); costC.appendChild(r);
+  });
+  wrap.appendChild(costC);
+
+  // 3) Margen-Rechner
+  const c=sd.calc;
+  const calcC=el('<div class="card"></div>'); calcC.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Margen-Rechner</h2>';
+  const fld=(label,key)=>{ const w=el('<label class="field"><span>'+esc(label)+'</span></label>'); const i=el('<input type="number" step="0.01" min="0" value="'+num(c[key],0)+'">'); i.oninput=()=>{ c[key]=num(i.value,0); recompute(); saveSystemDataSoon(); }; w.appendChild(i); return w; };
+  [["Verkaufspreis (€)","preis"],["Materialkosten pro Set (€)","material"],["Verpackung pro Set (€)","verpackung"],["Versandkosten pro Bestellung (€)","versand"],["Zahlungsgebühr (%)","gebuehrPct"],["Bestellungen pro Monat","bestellungen"]].forEach(([l,k])=>calcC.appendChild(fld(l,k)));
+  const out=el('<div style="margin-top:12px"></div>'); calcC.appendChild(out);
+  function recompute(){
+    const fix=sd.abos.reduce((a,x)=>a+num(x.eur,0),0);
+    const gebuehr=num(c.preis)*num(c.gebuehrPct)/100;
+    const db=num(c.preis)-num(c.material)-num(c.verpackung)-num(c.versand)-gebuehr;
+    const be=db>0?Math.ceil(fix/db):null;
+    const gewinn=db*num(c.bestellungen)-fix;
+    out.innerHTML=
+      kv("Deckungsbeitrag / Bestellung","<b>"+esc(fmtMoney(db))+"</b>")+
+      kv("Fixkosten / Monat",esc(fmtMoney(fix)))+
+      kv("Break-even",be!=null?be+" Bestellungen / Monat":"— (Deckungsbeitrag ≤ 0)")+
+      kv("Gewinn bei "+num(c.bestellungen)+" Bestellungen/Monat",'<b style="color:'+(gewinn>=0?"var(--ok)":"var(--danger)")+'">'+esc(fmtMoney(gewinn))+'</b>');
+  }
+  wrap.appendChild(calcC);
+  recalcSum(); recompute();
+  app.appendChild(wrap);
 }
 
 function viewSettings(app){
