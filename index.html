@@ -1208,11 +1208,22 @@ function renderProductEdit(box,p,id){
   card.appendChild(field("Titel",'<input type="text" id="pe-title" value="'+esc(p.title||"")+'">'));
   card.appendChild(field("Status",'<select id="pe-status">'+[["active","Aktiv"],["draft","Entwurf"],["archived","Archiviert"]].map(o=>'<option value="'+o[0]+'"'+(p.status===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'));
   box.appendChild(card);
-  const vc=el('<div class="card" style="margin-top:14px"></div>'); vc.innerHTML='<h2 style="font-size:14px;margin-bottom:12px">Preise</h2>';
+  const vc=el('<div class="card" style="margin-top:14px"></div>'); vc.innerHTML='<h2 style="font-size:14px;margin-bottom:12px">Preise & Bestand</h2>';
   (p.variants||[]).forEach(v=>{
-    const w=el('<div class="row" style="align-items:center;margin-bottom:10px"><span style="flex:1;min-width:0;font-size:14px">'+esc(v.title||"—")+'</span></div>');
-    w.appendChild(el('<input type="number" step="0.01" min="0" inputmode="decimal" value="'+(v.price==null?"":num(v.price,0))+'" data-vid="'+esc(v.id)+'" style="max-width:130px;text-align:right">'));
-    vc.appendChild(w);
+    const row=el('<div style="margin-bottom:14px"></div>');
+    row.appendChild(el('<div style="font-size:14px;font-weight:600;margin-bottom:6px">'+esc(v.title||"—")+'</div>'));
+    const inputs=el('<div class="row" style="gap:10px"></div>');
+    const pw=el('<label class="field" style="margin:0;flex:1"><span>Preis (€)</span></label>');
+    pw.appendChild(el('<input type="number" step="0.01" min="0" inputmode="decimal" value="'+(v.price==null?"":num(v.price,0))+'" data-vid="'+esc(v.id)+'">'));
+    inputs.appendChild(pw);
+    if(v.inventoryItemId && v.inventoryQuantity!=null){
+      const bw=el('<label class="field" style="margin:0;flex:1"><span>Bestand</span></label>');
+      bw.appendChild(el('<input type="number" step="1" inputmode="numeric" value="'+num(v.inventoryQuantity,0)+'" data-inv="'+esc(v.inventoryItemId)+'">'));
+      inputs.appendChild(bw);
+    } else {
+      inputs.appendChild(el('<div style="flex:1;align-self:flex-end;padding-bottom:11px"><span class="tiny muted">Bestand nicht verfolgt</span></div>'));
+    }
+    row.appendChild(inputs); vc.appendChild(row);
   });
   if(!(p.variants||[]).length) vc.appendChild(el('<p class="tiny muted">Keine Varianten.</p>'));
   box.appendChild(vc);
@@ -1225,6 +1236,8 @@ function renderProductEdit(box,p,id){
     const body={ title: box.querySelector("#pe-title").value.trim(), status: box.querySelector("#pe-status").value };
     const variants=[...box.querySelectorAll("input[data-vid]")].map(i=>({id:i.getAttribute("data-vid"), price:num(i.value,0)}));
     if(variants.length) body.variants=variants;
+    const inventory=[...box.querySelectorAll("input[data-inv]")].map(i=>({inventoryItemId:i.getAttribute("data-inv"), quantity:num(i.value,0)}));
+    if(inventory.length) body.inventory=inventory;
     try{
       await liveFetch("/admin/products/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(body)});
       toast("Produkt gespeichert ✓"); state.ui.editProduct=null; render();
