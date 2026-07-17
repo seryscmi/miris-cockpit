@@ -202,6 +202,19 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .bar-axis{display:flex;gap:3px;margin-top:6px}
 .bar-axis > span{flex:1 1 0;min-width:0;text-align:center;font-size:9px;color:var(--ink2);white-space:nowrap;overflow:hidden}
 
+/* Resource-Liste (gestapelt, mobil-freundlich) — Produkte/Kunden/Rabatte */
+.rlist-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+.rlist-row:first-child{border-top:none}
+.rlist-row.clickable{cursor:pointer}
+.rlist-row.clickable:active{background:var(--surface2)}
+@media(hover:hover){ .rlist-row.clickable:hover{background:var(--surface2)} }
+.rl-thumb{flex:0 0 auto;width:44px;height:44px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--ink2);overflow:hidden;font-size:18px}
+.rl-thumb img{width:100%;height:100%;object-fit:cover}
+.rl-body{min-width:0;flex:1}
+.rl-top{display:flex;align-items:center;gap:8px}
+.rl-title{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.rl-meta{font-size:12px;color:var(--ink2);margin-top:3px;font-variant-numeric:tabular-nums}
+
 /* Heute: Stat-Chips + Aktions-Warteschlange */
 .stat-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
 .stat-chip{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;min-width:106px;padding:14px 16px;background:var(--surface);text-decoration:none;transition:box-shadow .18s cubic-bezier(.22,1,.36,1)}
@@ -849,6 +862,7 @@ const MIRIS_LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABdwAAAFeCAYAAACf
 const NAV_ITEMS=[
   {name:"home",label:"Start",ico:"◪",short:"Start"},
   {name:"bestellungen",label:"Bestellungen",ico:"▦",short:"Orders"},
+  {name:"produkte",label:"Produkte",ico:"▣",short:"Produkte"},
   {name:"kunden",label:"Kunden",ico:"◎",short:"Kunden"},
   {name:"analytics",label:"Analytics",ico:"▥",short:"Analytics"},
   {name:"anliegen",label:"Inbox",ico:"✉",short:"Inbox"},
@@ -862,7 +876,7 @@ const NAV_ITEMS=[
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, kunden:viewKunden, kunde:viewKunde, analytics:viewAnalytics, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
+const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, produkte:viewProducts, produkt:viewProductDetail, kunden:viewKunden, kunde:viewKunde, analytics:viewAnalytics, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
 function viewImportRedirect(){ nav("#/einstellungen"); } // Alias: alte Lesezeichen/Links
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
@@ -886,7 +900,7 @@ function renderChrome(activeName){
   const side=document.getElementById("sidenav");
   const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0) };
   side.innerHTML=NAV_ITEMS.map(it=>{
-    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
+    const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="produkt"&&it.name==="produkte")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const badge=c?'<span class="n-badge">'+c+'</span>':"";
     return '<a href="#/'+it.name+'" class="'+(active?"active":"")+'"><span class="ico">'+navIco(it.name)+'</span><span>'+esc(it.label)+'</span>'+badge+'</a>';
   }).join("");
@@ -902,7 +916,7 @@ function openMoreSheet(names,counts){
     list.appendChild(row);
   });
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",kunden:"◎",analytics:"▥",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",produkte:"▣",kunden:"◎",analytics:"▥",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
@@ -919,6 +933,7 @@ function viewHome(app){
   const groups=[
     ["Verkauf",[
       {name:"bestellungen",label:"Bestellungen"},
+      {name:"produkte",label:"Produkte"},
       {name:"kunden",label:"Kunden"},
       {name:"analytics",label:"Analytics"},
     ]],
@@ -977,6 +992,23 @@ function dataTable(columns, rows, opts){
     });
   }
   t.appendChild(tb); wrap.appendChild(t); return wrap;
+}
+
+/* ---------- Gestapelte Resource-Liste (mobil-freundlich) ----------
+   render(row) -> HTML-String oder Node für den Zeileninhalt.
+   opts: { empty?, onRow?(row) } */
+function resourceList(rows, render, opts){
+  opts=opts||{};
+  const wrap=el('<div class="card" style="padding:0"></div>');
+  if(!rows||!rows.length){ wrap.appendChild(el('<p style="padding:22px 14px;text-align:center;color:var(--ink2);font-size:13px">'+esc(opts.empty||"Keine Einträge")+'</p>')); return wrap; }
+  rows.forEach(r=>{
+    const row=el('<div class="rlist-row'+(opts.onRow?' clickable':'')+'"></div>');
+    const c=render(r);
+    if(c instanceof Node) row.appendChild(c); else row.innerHTML=c;
+    if(opts.onRow) row.onclick=()=>opts.onRow(r);
+    wrap.appendChild(row);
+  });
+  return wrap;
 }
 
 /* ---------- Mini-Balkendiagramm ---------- */
@@ -1071,6 +1103,92 @@ function viewAnalytics(app){
 
   wrap.appendChild(el('<p class="tiny muted" style="margin-top:14px">Basiert auf den geladenen Bestellungen (aktuell die letzten bis zu 250). Eine eigene Auswertung für ältere Zeiträume kommt in einer späteren Stufe.</p>'));
   app.appendChild(wrap);
+}
+
+/* ======================================================================
+   Produkte — Katalog aus Shopify (Phase 1: lesen)
+   ====================================================================== */
+function prodStatusBadge(status){
+  const m={active:["var(--ok)","var(--ok-bg)","Aktiv"],draft:["var(--warn)","var(--warn-bg)","Entwurf"],archived:["var(--ink2)","var(--surface2)","Archiviert"]};
+  const x=m[status]||["var(--ink2)","var(--surface2)",status||"—"];
+  return '<span style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:700;color:'+x[0]+';background:'+x[1]+'">'+esc(x[2])+'</span>';
+}
+function priceRange(r){
+  if(r.priceMin==null) return "—";
+  if(r.priceMax!=null && r.priceMax!==r.priceMin) return fmtMoney(r.priceMin)+" – "+fmtMoney(r.priceMax);
+  return fmtMoney(r.priceMin);
+}
+function errorCard(e){
+  const msg=String((e&&e.message)||e);
+  const scope=/\b403\b/.test(msg)||/Berechtigung/i.test(msg);
+  const c=el('<div class="card"></div>');
+  c.innerHTML='<h2 style="font-size:14px;color:var(--danger);margin-bottom:8px">Konnte nicht laden</h2><p class="small" style="color:var(--ink2)">'+esc(msg)+'</p>'
+    +(scope?'<p class="tiny muted" style="margin-top:10px">Tipp: In Shopify die App-Berechtigungen erweitern (read_products) und die App neu installieren.</p>':'');
+  return c;
+}
+function viewProducts(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Produkte","Dein Katalog aus Shopify");
+  if(!liveConfigured()){ wrap.appendChild(emptyBlock("Nicht verbunden","Hinterlege Backend-URL und Token in den Einstellungen, um Produkte zu laden.","#/einstellungen","Einrichten")); app.appendChild(wrap); return; }
+  const searchRow=el('<div class="row" style="margin-bottom:12px"></div>');
+  const search=el('<input type="text" placeholder="Produkte suchen…" value="'+esc(state.ui.productsQuery||"")+'" style="flex:1;min-width:140px;max-width:340px">');
+  searchRow.appendChild(search); wrap.appendChild(searchRow);
+  const listBox=el('<div></div>'); wrap.appendChild(listBox); app.appendChild(wrap);
+  const load=async()=>{
+    listBox.innerHTML=''; listBox.appendChild(el('<p class="tiny muted" style="padding:20px 0;text-align:center">Lade Produkte… <span class="spin"></span></p>'));
+    try{
+      const q=(state.ui.productsQuery||"").trim();
+      const data=await liveFetch("/admin/products"+(q?("?q="+encodeURIComponent(q)):""));
+      const products=Array.isArray(data.products)?data.products:[];
+      listBox.innerHTML='';
+      listBox.appendChild(resourceList(products, r=>{
+        const thumb=r.image?'<img src="'+safeUrl(r.image)+'" alt="">':'▣';
+        return '<div class="rl-thumb">'+thumb+'</div>'
+          +'<div class="rl-body"><div class="rl-top"><span class="rl-title">'+esc(r.title||"—")+'</span>'+prodStatusBadge(r.status)+'</div>'
+          +'<div class="rl-meta">'+esc(priceRange(r))+' · Bestand '+(r.totalInventory==null?"—":r.totalInventory)+'</div></div>';
+      }, {empty:"Keine Produkte gefunden", onRow:r=>nav("#/produkt/"+encodeURIComponent(r.id))}));
+      listBox.appendChild(el('<p class="tiny muted" style="margin-top:10px">'+products.length+' Produkt'+(products.length===1?"":"e")+' · Tippen zum Öffnen</p>'));
+    }catch(e){ listBox.innerHTML=''; listBox.appendChild(errorCard(e)); }
+  };
+  let t=null; search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>{ state.ui.productsQuery=search.value; load(); },350); });
+  load();
+}
+function viewProductDetail(app, id){
+  const wrap=el('<div></div>');
+  wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/produkte">‹ Produkte</a></div></div>';
+  const box=el('<div></div>'); wrap.appendChild(box); app.appendChild(wrap);
+  if(!liveConfigured()){ box.appendChild(emptyBlock("Nicht verbunden","","#/einstellungen","Einrichten")); return; }
+  box.appendChild(el('<p class="tiny muted" style="padding:20px 0;text-align:center">Lade Produkt… <span class="spin"></span></p>'));
+  liveFetch("/admin/products/"+encodeURIComponent(id)).then(data=>{
+    const p=data.product; box.innerHTML='';
+    if(!p){ box.appendChild(emptyBlock("Nicht gefunden","","#/produkte","Zurück")); return; }
+    const head=el('<div class="card"></div>');
+    head.innerHTML='<div style="display:flex;gap:14px;align-items:flex-start">'
+      +(p.image?'<img src="'+safeUrl(p.image)+'" alt="" style="width:72px;height:72px;object-fit:cover;background:var(--surface2);flex:0 0 auto">':'')
+      +'<div style="min-width:0"><h1 style="font-size:18px;margin:0 0 8px;font-family:var(--serif)">'+esc(p.title)+'</h1>'
+      +prodStatusBadge(p.status)+' <span class="tiny muted" style="margin-left:6px">'+esc(priceRange(p))+'</span></div></div>';
+    head.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(p.adminUrl)+'" target="_blank" rel="noopener" style="margin-top:14px">In Shopify öffnen ↗</a>'));
+    box.appendChild(head);
+    const vc=el('<div class="card" style="margin-top:14px;padding:0"></div>');
+    vc.innerHTML='<h2 style="font-size:14px;padding:20px 20px 12px">Varianten & Bestand</h2>';
+    vc.appendChild(dataTable(
+      [
+        {label:"Variante",render:r=>{ const d=el('<div></div>'); d.innerHTML='<div style="font-weight:600">'+esc(r.title||"—")+'</div>'+(r.sku?'<div class="tiny muted">'+esc(r.sku)+'</div>':''); return d; }},
+        {label:"Preis",align:"right",render:r=>r.price==null?"—":fmtMoney(r.price)},
+        {label:"Bestand",align:"right",render:r=>r.inventoryQuantity==null?"—":String(r.inventoryQuantity)},
+      ],
+      p.variants||[], {empty:"Keine Varianten"}));
+    box.appendChild(vc);
+    const descText=String(p.descriptionHtml||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+    if(descText){
+      const dc=el('<div class="card" style="margin-top:14px"></div>');
+      dc.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Beschreibung</h2><p class="small" style="color:var(--ink2)">'+esc(descText)+'</p>';
+      box.appendChild(dc);
+    }
+    box.appendChild(el('<p class="tiny muted" style="margin-top:14px">Bearbeiten (Preis, Bestand, Status, Bilder) kommt in der nächsten Stufe.</p>'));
+  }).catch(e=>{ box.innerHTML='';
+    if(/\b404\b/.test(String((e&&e.message)||e))) box.appendChild(emptyBlock("Produkt nicht gefunden","Dieses Produkt gibt es nicht (mehr).","#/produkte","Zurück zu Produkte"));
+    else box.appendChild(errorCard(e));
+  });
 }
 
 /* ======================================================================
