@@ -1129,6 +1129,7 @@ function errorCard(e){
   return c;
 }
 function viewProducts(app){
+  state.ui.editProduct=null;
   const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Produkte","Dein Katalog aus Shopify");
   if(!liveConfigured()){ wrap.appendChild(emptyBlock("Nicht verbunden","Hinterlege Backend-URL und Token in den Einstellungen, um Produkte zu laden.","#/einstellungen","Einrichten")); app.appendChild(wrap); return; }
   const searchRow=el('<div class="row" style="margin-bottom:12px"></div>');
@@ -1162,35 +1163,74 @@ function viewProductDetail(app, id){
   box.appendChild(el('<p class="tiny muted" style="padding:20px 0;text-align:center">Lade Produkt… <span class="spin"></span></p>'));
   liveFetch("/admin/products/"+encodeURIComponent(id)).then(data=>{
     const p=data.product; box.innerHTML='';
-    if(!p){ box.appendChild(emptyBlock("Nicht gefunden","","#/produkte","Zurück")); return; }
-    const head=el('<div class="card"></div>');
-    head.innerHTML='<div style="display:flex;gap:14px;align-items:flex-start">'
-      +(p.image?'<img src="'+safeUrl(p.image)+'" alt="" style="width:72px;height:72px;object-fit:cover;background:var(--surface2);flex:0 0 auto">':'')
-      +'<div style="min-width:0"><h1 style="font-size:18px;margin:0 0 8px;font-family:var(--serif)">'+esc(p.title)+'</h1>'
-      +prodStatusBadge(p.status)+' <span class="tiny muted" style="margin-left:6px">'+esc(priceRange(p))+'</span></div></div>';
-    head.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(p.adminUrl)+'" target="_blank" rel="noopener" style="margin-top:14px">In Shopify öffnen ↗</a>'));
-    box.appendChild(head);
-    const vc=el('<div class="card" style="margin-top:14px;padding:0"></div>');
-    vc.innerHTML='<h2 style="font-size:14px;padding:20px 20px 12px">Varianten & Bestand</h2>';
-    vc.appendChild(dataTable(
-      [
-        {label:"Variante",render:r=>{ const d=el('<div></div>'); d.innerHTML='<div style="font-weight:600">'+esc(r.title||"—")+'</div>'+(r.sku?'<div class="tiny muted">'+esc(r.sku)+'</div>':''); return d; }},
-        {label:"Preis",align:"right",render:r=>r.price==null?"—":fmtMoney(r.price)},
-        {label:"Bestand",align:"right",render:r=>r.inventoryQuantity==null?"—":String(r.inventoryQuantity)},
-      ],
-      p.variants||[], {empty:"Keine Varianten"}));
-    box.appendChild(vc);
-    const descText=String(p.descriptionHtml||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
-    if(descText){
-      const dc=el('<div class="card" style="margin-top:14px"></div>');
-      dc.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Beschreibung</h2><p class="small" style="color:var(--ink2)">'+esc(descText)+'</p>';
-      box.appendChild(dc);
-    }
-    box.appendChild(el('<p class="tiny muted" style="margin-top:14px">Bearbeiten (Preis, Bestand, Status, Bilder) kommt in der nächsten Stufe.</p>'));
+    if(!p){ box.appendChild(emptyBlock("Produkt nicht gefunden","Dieses Produkt gibt es nicht (mehr).","#/produkte","Zurück zu Produkte")); return; }
+    if(state.ui.editProduct===String(p.id)) renderProductEdit(box,p,id);
+    else renderProductView(box,p,id);
   }).catch(e=>{ box.innerHTML='';
     if(/\b404\b/.test(String((e&&e.message)||e))) box.appendChild(emptyBlock("Produkt nicht gefunden","Dieses Produkt gibt es nicht (mehr).","#/produkte","Zurück zu Produkte"));
     else box.appendChild(errorCard(e));
   });
+}
+function renderProductView(box,p,id){
+  const head=el('<div class="card"></div>');
+  head.innerHTML='<div style="display:flex;gap:14px;align-items:flex-start">'
+    +(p.image?'<img src="'+safeUrl(p.image)+'" alt="" style="width:72px;height:72px;object-fit:cover;background:var(--surface2);flex:0 0 auto">':'')
+    +'<div style="min-width:0"><h1 style="font-size:18px;margin:0 0 8px;font-family:var(--serif)">'+esc(p.title)+'</h1>'
+    +prodStatusBadge(p.status)+' <span class="tiny muted" style="margin-left:6px">'+esc(priceRange(p))+'</span></div></div>';
+  const bar=el('<div class="row" style="margin-top:14px;gap:8px"></div>');
+  const editB=el('<button class="btn btn-primary btn-sm">Bearbeiten</button>');
+  editB.onclick=()=>{ state.ui.editProduct=String(p.id); render(); };
+  bar.appendChild(editB);
+  bar.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(p.adminUrl)+'" target="_blank" rel="noopener">In Shopify öffnen ↗</a>'));
+  head.appendChild(bar);
+  box.appendChild(head);
+  const vc=el('<div class="card" style="margin-top:14px;padding:0"></div>');
+  vc.innerHTML='<h2 style="font-size:14px;padding:20px 20px 12px">Varianten & Bestand</h2>';
+  vc.appendChild(dataTable(
+    [
+      {label:"Variante",render:r=>{ const d=el('<div></div>'); d.innerHTML='<div style="font-weight:600">'+esc(r.title||"—")+'</div>'+(r.sku?'<div class="tiny muted">'+esc(r.sku)+'</div>':''); return d; }},
+      {label:"Preis",align:"right",render:r=>r.price==null?"—":fmtMoney(r.price)},
+      {label:"Bestand",align:"right",render:r=>r.inventoryQuantity==null?"—":String(r.inventoryQuantity)},
+    ],
+    p.variants||[], {empty:"Keine Varianten"}));
+  box.appendChild(vc);
+  const descText=String(p.descriptionHtml||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+  if(descText){
+    const dc=el('<div class="card" style="margin-top:14px"></div>');
+    dc.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Beschreibung</h2><p class="small" style="color:var(--ink2)">'+esc(descText)+'</p>';
+    box.appendChild(dc);
+  }
+  box.appendChild(el('<p class="tiny muted" style="margin-top:14px">Beschreibung & Bilder bearbeitest du vorerst in Shopify.</p>'));
+}
+function renderProductEdit(box,p,id){
+  const card=el('<div class="card"></div>');
+  card.innerHTML='<h2 style="font-size:14px;margin-bottom:12px">Produkt bearbeiten</h2>';
+  card.appendChild(field("Titel",'<input type="text" id="pe-title" value="'+esc(p.title||"")+'">'));
+  card.appendChild(field("Status",'<select id="pe-status">'+[["active","Aktiv"],["draft","Entwurf"],["archived","Archiviert"]].map(o=>'<option value="'+o[0]+'"'+(p.status===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'));
+  box.appendChild(card);
+  const vc=el('<div class="card" style="margin-top:14px"></div>'); vc.innerHTML='<h2 style="font-size:14px;margin-bottom:12px">Preise</h2>';
+  (p.variants||[]).forEach(v=>{
+    const w=el('<div class="row" style="align-items:center;margin-bottom:10px"><span style="flex:1;min-width:0;font-size:14px">'+esc(v.title||"—")+'</span></div>');
+    w.appendChild(el('<input type="number" step="0.01" min="0" inputmode="decimal" value="'+(v.price==null?"":num(v.price,0))+'" data-vid="'+esc(v.id)+'" style="max-width:130px;text-align:right">'));
+    vc.appendChild(w);
+  });
+  if(!(p.variants||[]).length) vc.appendChild(el('<p class="tiny muted">Keine Varianten.</p>'));
+  box.appendChild(vc);
+  const bar=el('<div class="row" style="margin-top:16px;gap:10px"></div>');
+  const saveB=el('<button class="btn btn-primary">Speichern</button>');
+  const cancelB=el('<button class="btn btn-ghost">Abbrechen</button>');
+  cancelB.onclick=()=>{ state.ui.editProduct=null; render(); };
+  saveB.onclick=async()=>{
+    const oldTxt=saveB.textContent; saveB.disabled=true; cancelB.disabled=true; saveB.innerHTML='Speichern… <span class="spin"></span>';
+    const body={ title: box.querySelector("#pe-title").value.trim(), status: box.querySelector("#pe-status").value };
+    const variants=[...box.querySelectorAll("input[data-vid]")].map(i=>({id:i.getAttribute("data-vid"), price:num(i.value,0)}));
+    if(variants.length) body.variants=variants;
+    try{
+      await liveFetch("/admin/products/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(body)});
+      toast("Produkt gespeichert ✓"); state.ui.editProduct=null; render();
+    }catch(e){ toast("Fehler: "+((e&&e.message)||e),5000); saveB.disabled=false; cancelB.disabled=false; saveB.textContent=oldTxt; }
+  };
+  bar.appendChild(saveB); bar.appendChild(cancelB); box.appendChild(bar);
 }
 
 /* ======================================================================
