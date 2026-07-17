@@ -1623,6 +1623,11 @@ function viewOrderDetail(app,name){
       eb.onclick=()=>openMailModal({email:o.customerEmail, firstName:(o.customerName||"").split(" ")[0], orderName:o.name});
       row.appendChild(eb);
     }
+    if(!unpaid){
+      const rb=el('<button class="btn btn-sm btn-ghost">Erstatten</button>');
+      rb.onclick=()=>openRefundModal(o);
+      row.appendChild(rb);
+    }
     row.appendChild(el('<span class="spacer"></span>'));
     const cb=el('<button class="btn btn-sm btn-danger">Stornieren</button>');
     cb.onclick=async()=>{ if(await confirmDialog("Bestellung stornieren?",o.name+" wird in Shopify STORNIERT (mit Erstattung falls bezahlt, Bestand zurückgebucht, Kunde wird benachrichtigt). Das kann nicht rückgängig gemacht werden.","Stornieren",true)) runAction(cb,"Storniert","/cancel",{refund:true,restock:true,notify:true}); };
@@ -1668,6 +1673,31 @@ function viewOrderDetail(app,name){
   wrap.appendChild(nc);
 
   app.appendChild(wrap);
+}
+function openRefundModal(o){
+  const m=showModal('<h2 style="font-size:15px">Erstattung — '+esc(o.name)+'</h2><div id="rf-body"><p class="tiny muted">Lade erstattbaren Betrag… <span class="spin"></span></p></div>');
+  const body=m.querySelector("#rf-body");
+  liveFetch("/admin/orders/"+encodeURIComponent(o.name)+"/refund-info").then(info=>{
+    const max=num(info.maxRefundable,0), cur=info.currency||"EUR";
+    if(!(max>0)){ body.innerHTML='<p class="small">Für diese Bestellung ist aktuell nichts erstattbar.</p><div class="modal-btns"><button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>'; return; }
+    body.innerHTML='<p class="small" style="margin-bottom:12px">Erstattbar: <b>'+esc(fmtMoney(max,cur))+'</b></p>';
+    body.appendChild(el('<label class="field"><span>Betrag ('+esc(cur)+')</span><input type="number" step="0.01" min="0.01" max="'+max+'" inputmode="decimal" id="rf-amt" value="'+max.toFixed(2)+'"></label>'));
+    body.appendChild(el('<label class="field"><span>Notiz (optional)</span><input type="text" id="rf-note" placeholder="z. B. Kulanz / Rücksendung"></label>'));
+    const btns=el('<div class="modal-btns"></div>');
+    const cancel=el('<button class="btn btn-ghost">Abbrechen</button>'); cancel.onclick=()=>closeModal();
+    const go=el('<button class="btn btn-primary">Erstatten</button>');
+    go.onclick=async()=>{
+      const a=num(body.querySelector("#rf-amt").value,0);
+      if(!(a>0)||a>max+0.001){ toast("Betrag muss zwischen 0 und "+fmtMoney(max,cur)+" liegen"); return; }
+      if(!await confirmDialog("Erstattung bestätigen?",fmtMoney(a,cur)+" an "+(o.customerName||o.customerEmail||"den Kunden")+" für "+o.name+" erstatten? Das Geld geht zurück und lässt sich nicht rückgängig machen.","Jetzt erstatten",true)) return;
+      go.disabled=true; cancel.disabled=true; go.innerHTML='Erstatte… <span class="spin"></span>';
+      try{
+        await liveFetch("/admin/orders/"+encodeURIComponent(o.name)+"/refund",{method:"POST",body:JSON.stringify({amount:a, note:(body.querySelector("#rf-note").value||"").trim()})});
+        closeModal(); toast("Erstattet ✓"); try{ await liveSyncAll(); }catch(e){} render();
+      }catch(e){ go.disabled=false; cancel.disabled=false; go.textContent="Erstatten"; toast((e&&e.message)||e,5000); }
+    };
+    btns.appendChild(cancel); btns.appendChild(go); body.appendChild(btns);
+  }).catch(e=>{ body.innerHTML='<p class="small" style="color:var(--danger)">'+esc((e&&e.message)||String(e))+'</p><div class="modal-btns"><button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>'; });
 }
 function openFulfillModal(o){
   const m=showModal(
