@@ -864,6 +864,7 @@ const NAV_ITEMS=[
   {name:"bestellungen",label:"Bestellungen",ico:"▦",short:"Orders"},
   {name:"produkte",label:"Produkte",ico:"▣",short:"Produkte"},
   {name:"kunden",label:"Kunden",ico:"◎",short:"Kunden"},
+  {name:"rabatte",label:"Rabatte",ico:"%",short:"Rabatte"},
   {name:"analytics",label:"Analytics",ico:"▥",short:"Analytics"},
   {name:"anliegen",label:"Inbox",ico:"✉",short:"Inbox"},
   {name:"chats",label:"Chats",ico:"❋",short:"Chats"},
@@ -876,7 +877,7 @@ const NAV_ITEMS=[
 ];
 function nav(hash){ location.hash=hash; }
 function parseRoute(){ const h=(location.hash||"#/home").replace(/^#\/?/,""); const seg=h.split("/").filter(Boolean); let arg=seg[1]||null; if(arg){ try{ arg=decodeURIComponent(arg); }catch(e){} } return {name:seg[0]||"home",arg}; }
-const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, produkte:viewProducts, produkt:viewProductDetail, kunden:viewKunden, kunde:viewKunde, analytics:viewAnalytics, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
+const views={ home:viewHome, bestellungen:viewOrders, bestellung:viewOrderDetail, produkte:viewProducts, produkt:viewProductDetail, kunden:viewKunden, kunde:viewKunde, rabatte:viewDiscounts, analytics:viewAnalytics, anliegen:viewAnliegen, chats:viewChats, wissensluecken:viewGaps, dsgvo:viewGdpr, kalender:viewCalendar, tag:viewDay, bank:viewBank, system:viewSystem, import:viewImportRedirect, einstellungen:viewSettings };
 function viewImportRedirect(){ nav("#/einstellungen"); } // Alias: alte Lesezeichen/Links
 function render(){
   const app=document.getElementById("app"); app.innerHTML=""; try{ window.scrollTo(0,0); }catch(e){}
@@ -916,7 +917,7 @@ function openMoreSheet(names,counts){
     list.appendChild(row);
   });
 }
-function navIco(name){ const m={home:"⌂",bestellungen:"▦",produkte:"▣",kunden:"◎",analytics:"▥",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
+function navIco(name){ const m={home:"⌂",bestellungen:"▦",produkte:"▣",kunden:"◎",rabatte:"%",analytics:"▥",anliegen:"✉",chats:"❋",wissensluecken:"◐",dsgvo:"◉",kalender:"▤",bank:"€",system:"◈",einstellungen:"⚙"}; return m[name]||"•"; }
 
 /* ======================================================================
    Views
@@ -935,6 +936,7 @@ function viewHome(app){
       {name:"bestellungen",label:"Bestellungen"},
       {name:"produkte",label:"Produkte"},
       {name:"kunden",label:"Kunden"},
+      {name:"rabatte",label:"Rabatte"},
       {name:"analytics",label:"Analytics"},
     ]],
     ["Kundenservice",[
@@ -1189,6 +1191,38 @@ function viewProductDetail(app, id){
     if(/\b404\b/.test(String((e&&e.message)||e))) box.appendChild(emptyBlock("Produkt nicht gefunden","Dieses Produkt gibt es nicht (mehr).","#/produkte","Zurück zu Produkte"));
     else box.appendChild(errorCard(e));
   });
+}
+
+/* ======================================================================
+   Rabatte — Codes & automatische Rabatte (Phase 1: lesen)
+   ====================================================================== */
+function fmtDiscountValue(v){
+  if(!v) return "—";
+  if(v.type==="free_shipping") return "Gratis Versand";
+  if(v.type==="percentage") return v.amount+" %";
+  if(v.type==="amount") return "−"+fmtMoney(v.amount,v.currency);
+  return "—";
+}
+function discountStatusBadge(s){
+  const m={active:["var(--ok)","var(--ok-bg)","Aktiv"],expired:["var(--ink2)","var(--surface2)","Abgelaufen"],scheduled:["var(--warn)","var(--warn-bg)","Geplant"]};
+  const x=m[s]||["var(--ink2)","var(--surface2)",s||"—"];
+  return '<span style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:700;color:'+x[0]+';background:'+x[1]+'">'+esc(x[2])+'</span>';
+}
+function viewDiscounts(app){
+  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Rabatte","Rabattcodes & automatische Rabatte");
+  if(!liveConfigured()){ wrap.appendChild(emptyBlock("Nicht verbunden","Hinterlege Backend-URL und Token in den Einstellungen.","#/einstellungen","Einrichten")); app.appendChild(wrap); return; }
+  const box=el('<div></div>'); wrap.appendChild(box); app.appendChild(wrap);
+  box.appendChild(el('<p class="tiny muted" style="padding:20px 0;text-align:center">Lade Rabatte… <span class="spin"></span></p>'));
+  liveFetch("/admin/discounts").then(data=>{
+    const discounts=Array.isArray(data.discounts)?data.discounts:[];
+    box.innerHTML='';
+    box.appendChild(resourceList(discounts, d=>{
+      const title=d.code||d.title||"Rabatt";
+      const meta=(d.kind==="code"?"Code":"Automatisch")+" · "+fmtDiscountValue(d.value)+(d.usage!=null?" · "+d.usage+"× genutzt":"");
+      return '<div class="rl-body"><div class="rl-top"><span class="rl-title">'+esc(title)+'</span>'+discountStatusBadge(d.status)+'</div><div class="rl-meta">'+esc(meta)+'</div></div>';
+    }, {empty:"Noch keine Rabatte angelegt"}));
+    box.appendChild(el('<p class="tiny muted" style="margin-top:10px">'+discounts.length+' Rabatt'+(discounts.length===1?"":"e")+' · Anlegen/Bearbeiten kommt in einer späteren Stufe</p>'));
+  }).catch(e=>{ box.innerHTML=''; box.appendChild(errorCard(e)); });
 }
 
 /* ======================================================================
@@ -1842,31 +1876,43 @@ function viewKunden(app){
   const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Kunden","");
   const search=el('<input type="text" placeholder="Name oder E-Mail…" value="'+esc(state.ui.kundenQuery||"")+'" style="max-width:340px;margin-bottom:12px">');
   wrap.appendChild(search);
-  const box=el('<div></div>'); wrap.appendChild(box);
-  const renderList=()=>{
+  const box=el('<div></div>'); wrap.appendChild(box); app.appendChild(wrap);
+  // Lokale (abgeleitete) Liste — Fallback, wenn Backend nicht verbunden/erreichbar
+  const renderDerived=()=>{
     box.innerHTML="";
     const q=normStr(state.ui.kundenQuery||"");
-    const list=Object.values(aggregateCustomers())
-      .filter(c=>!q||normStr(c.name+" "+c.email).includes(q))
-      .sort((a,b)=>(b.last||0)-(a.last||0));
+    const list=Object.values(aggregateCustomers()).filter(c=>!q||normStr(c.name+" "+c.email).includes(q)).sort((a,b)=>(b.last||0)-(a.last||0));
     if(!list.length){ box.appendChild(el('<div class="card"><div class="empty"><div class="e-ico">◎</div><p>Keine Kunden gefunden.</p></div></div>')); return; }
-    list.forEach(c=>{
-      const it=el('<div class="list-item"></div>');
-      it.innerHTML='<div style="flex:1;min-width:0"><div style="font-weight:800">'+esc(c.name||c.email)+'</div><div class="small muted" style="overflow:hidden;text-overflow:ellipsis">'+esc(c.email)+'</div></div>'+
-        '<div style="text-align:right"><div class="small"><b>'+c.orders.length+'</b> Best. · '+esc(fmtMoney(c.revenue))+'</div><div class="tiny muted">'+(c.last?esc(fmtDate(c.last)):"—")+'</div></div>';
-      it.onclick=()=>nav("#/kunde/"+encodeURIComponent(c.email));
-      box.appendChild(it);
-    });
+    box.appendChild(resourceList(list, c=>{
+      const meta=c.orders.length+" Best. · "+fmtMoney(c.revenue)+(c.last?" · "+fmtDate(c.last):"");
+      return '<div class="rl-body"><div class="rl-top"><span class="rl-title">'+esc(c.name||c.email)+'</span></div><div class="rl-meta">'+esc(meta)+'</div><div class="tiny muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.email)+'</div></div>';
+    }, {onRow:c=>nav("#/kunde/"+encodeURIComponent(c.email))}));
   };
+  // Echte Shopify-Kundenliste (Live)
+  const loadLive=async()=>{
+    box.innerHTML=''; box.appendChild(el('<p class="tiny muted" style="padding:20px 0;text-align:center">Lade Kunden… <span class="spin"></span></p>'));
+    try{
+      const q=(state.ui.kundenQuery||"").trim();
+      const data=await liveFetch("/admin/customers"+(q?("?q="+encodeURIComponent(q)):""));
+      const customers=Array.isArray(data.customers)?data.customers:[];
+      box.innerHTML='';
+      box.appendChild(resourceList(customers, c=>{
+        const parts=[c.ordersCount+" Best.", fmtMoney(c.amountSpent,c.currency)];
+        if(c.tags&&c.tags.length) parts.push(c.tags.slice(0,2).join(", "));
+        return '<div class="rl-body"><div class="rl-top"><span class="rl-title">'+esc(c.name||c.email||"—")+'</span></div><div class="rl-meta">'+esc(parts.join(" · "))+'</div><div class="tiny muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.email||"")+'</div></div>';
+      }, {empty:"Keine Kunden gefunden", onRow:c=>nav("#/kunde/"+encodeURIComponent(normEmail(c.email)||c.id))}));
+      box.appendChild(el('<p class="tiny muted" style="margin-top:10px">'+customers.length+' Kunde'+(customers.length===1?"":"n")+'</p>'));
+    }catch(e){ box.innerHTML=''; box.appendChild(errorCard(e)); }
+  };
+  const doLoad=()=>{ if(liveConfigured()) loadLive(); else renderDerived(); };
   let t=null;
-  search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>{ state.ui.kundenQuery=search.value; renderList(); },200); });
-  renderList();
-  app.appendChild(wrap);
+  search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>{ state.ui.kundenQuery=search.value; doLoad(); }, liveConfigured()?350:200); });
+  doLoad();
 }
 function viewKunde(app,emailArg){
   const email=normEmail(emailArg);
-  const c=aggregateCustomers()[email];
-  if(!c){ app.appendChild(emptyBlock("Kunde nicht gefunden","","#/kunden","Zur Kundenliste")); return; }
+  if(!email){ app.appendChild(emptyBlock("Kunde nicht gefunden","","#/kunden","Zur Kundenliste")); return; }
+  const c=aggregateCustomers()[email] || { email, name:"", orders:[], anliegen:[], revenue:0, first:null, last:null };
   const now=Date.now();
   const wrap=el('<div></div>');
   wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/kunden">‹ Kunden</a></div>'+
@@ -1888,6 +1934,25 @@ function viewKunde(app,emailArg){
     acts.appendChild(db);
   }
   wrap.appendChild(acts);
+  // Shopify-Kundendaten (echte Datensätze, lazy geladen)
+  if(liveConfigured()){
+    const sc=el('<div class="card"></div>'); sc.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Shopify-Kundendaten</h2>';
+    const sb=el('<p class="tiny muted">Lade…</p>'); sc.appendChild(sb); wrap.appendChild(sc);
+    liveFetch("/admin/customers/by-email?email="+encodeURIComponent(email)).then(r=>{
+      sc.removeChild(sb); const cu=r.customer;
+      if(!cu){ sc.appendChild(el('<p class="tiny muted">Kein Shopify-Kundenkonto zu dieser E-Mail.</p>')); return; }
+      const add=(k,v)=>{ if(v!=null && v!=="") sc.appendChild(el(kv(k,esc(String(v))))); };
+      add("Name",cu.name);
+      add("Gesamtumsatz",fmtMoney(cu.amountSpent,cu.currency));
+      add("Bestellungen",String(cu.ordersCount));
+      if(cu.tags&&cu.tags.length) add("Tags",cu.tags.join(", "));
+      if(cu.marketingState) add("E-Mail-Marketing",cu.marketingState==="SUBSCRIBED"?"Abonniert":cu.marketingState);
+      add("Telefon",cu.phone);
+      if(cu.defaultAddress){ const a=cu.defaultAddress; const line=[a.address1,[a.zip,a.city].filter(Boolean).join(" "),a.country].filter(Boolean).join(", "); add("Adresse",line); }
+      add("Notiz",cu.note);
+      if(cu.adminUrl) sc.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(cu.adminUrl)+'" target="_blank" rel="noopener" style="margin-top:10px">Kunde in Shopify öffnen ↗</a>'));
+    }).catch(()=>{ const q=sc.querySelector("p"); if(q) q.textContent="Shopify-Kundendaten gerade nicht erreichbar."; });
+  }
   // Kontakt & Adresse (aus neuester Bestellung, editierbar wenn möglich)
   const latest=c.orders.slice().sort((a,b)=>b.createdAt-a.createdAt)[0];
   if(latest){
