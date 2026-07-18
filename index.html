@@ -1717,6 +1717,22 @@ function viewOrderDetail(app,name){
 
   app.appendChild(wrap);
 }
+function openCustomerEdit(cu, onDone){
+  const m=showModal('<h2 style="font-size:15px">'+esc(cu.name||cu.email||"Kunde")+'</h2>'
+    +'<label class="field"><span>Tags (Komma-getrennt)</span><input type="text" id="cu-tags" value="'+esc((cu.tags||[]).join(", "))+'" placeholder="VIP, Stammkunde"></label>'
+    +'<label class="field"><span>Interne Notiz</span><textarea id="cu-note" rows="3">'+esc(cu.note||"")+'</textarea></label>'
+    +'<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Speichern</button></div>');
+  m.querySelector('[data-x=no]').onclick=()=>closeModal();
+  m.querySelector('[data-x=yes]').onclick=async()=>{
+    const tags=(m.querySelector("#cu-tags").value||"").split(",").map(t=>t.trim()).filter(Boolean);
+    const note=(m.querySelector("#cu-note").value||"").trim();
+    const yes=m.querySelector('[data-x=yes]'); yes.disabled=true; yes.innerHTML='Speichere… <span class="spin"></span>';
+    try{
+      await liveFetch("/admin/customers/"+encodeURIComponent(cu.id),{method:"PATCH",body:JSON.stringify({tags, note})});
+      closeModal(); toast("Kunde gespeichert ✓"); if(onDone) onDone();
+    }catch(e){ yes.disabled=false; yes.textContent="Speichern"; toast((e&&e.message)||e,5000); }
+  };
+}
 function openRefundModal(o){
   const m=showModal('<h2 style="font-size:15px">Erstattung — '+esc(o.name)+'</h2><div id="rf-body"><p class="tiny muted">Lade erstattbaren Betrag… <span class="spin"></span></p></div>');
   const body=m.querySelector("#rf-body");
@@ -2076,7 +2092,12 @@ function viewKunde(app,emailArg){
       add("Telefon",cu.phone);
       if(cu.defaultAddress){ const a=cu.defaultAddress; const line=[a.address1,[a.zip,a.city].filter(Boolean).join(" "),a.country].filter(Boolean).join(", "); add("Adresse",line); }
       add("Notiz",cu.note);
-      if(cu.adminUrl) sc.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(cu.adminUrl)+'" target="_blank" rel="noopener" style="margin-top:10px">Kunde in Shopify öffnen ↗</a>'));
+      const cuBar=el('<div class="row" style="margin-top:12px;gap:8px"></div>');
+      const editBtn=el('<button class="btn btn-sm btn-primary">Tags & Notiz bearbeiten</button>');
+      editBtn.onclick=()=>openCustomerEdit(cu,()=>render());
+      cuBar.appendChild(editBtn);
+      if(cu.adminUrl) cuBar.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(cu.adminUrl)+'" target="_blank" rel="noopener">In Shopify öffnen ↗</a>'));
+      sc.appendChild(cuBar);
     }).catch(()=>{ const q=sc.querySelector("p"); if(q) q.textContent="Shopify-Kundendaten gerade nicht erreichbar."; });
   }
   // Kontakt & Adresse (aus neuester Bestellung, editierbar wenn möglich)
