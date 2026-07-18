@@ -1184,6 +1184,23 @@ function renderProductView(box,p,id){
   bar.appendChild(el('<a class="btn btn-sm btn-ghost" href="'+safeUrl(p.adminUrl)+'" target="_blank" rel="noopener">In Shopify öffnen ↗</a>'));
   head.appendChild(bar);
   box.appendChild(head);
+  // Bilder verwalten
+  const imgC=el('<div class="card" style="margin-top:14px"></div>'); imgC.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Bilder</h2>';
+  const grid=el('<div style="display:flex;gap:8px;flex-wrap:wrap"></div>');
+  (p.images||[]).forEach(im=>{
+    const cell=el('<div style="position:relative;flex:0 0 auto"></div>');
+    cell.appendChild(el('<img src="'+safeUrl(im.url)+'" alt="" style="width:74px;height:74px;object-fit:cover;background:var(--surface2)">'));
+    if(im.id){ const x=el('<button class="btn btn-danger" title="Bild löschen" aria-label="Bild löschen" style="position:absolute;top:3px;right:3px;min-height:0;padding:0 7px;font-size:14px;line-height:1.6">×</button>');
+      x.onclick=async()=>{ if(!await confirmDialog("Bild löschen?","Dieses Produktbild wird in Shopify entfernt.","Löschen",true)) return; try{ await liveFetch("/admin/products/"+encodeURIComponent(id)+"/image/delete",{method:"POST",body:JSON.stringify({mediaId:im.id})}); toast("Bild gelöscht ✓"); render(); }catch(e){ toast((e&&e.message)||e,5000); } };
+      cell.appendChild(x); }
+    grid.appendChild(cell);
+  });
+  if(!(p.images||[]).length) grid.appendChild(el('<p class="tiny muted">Noch keine Bilder.</p>'));
+  imgC.appendChild(grid);
+  const addImg=el('<button class="btn btn-sm btn-ghost" style="margin-top:10px">+ Bild hinzufügen</button>');
+  addImg.onclick=()=>pickAndUploadProductImage(id);
+  imgC.appendChild(addImg);
+  box.appendChild(imgC);
   const vc=el('<div class="card" style="margin-top:14px;padding:0"></div>');
   vc.innerHTML='<h2 style="font-size:14px;padding:20px 20px 12px">Varianten & Bestand</h2>';
   vc.appendChild(dataTable(
@@ -1200,7 +1217,29 @@ function renderProductView(box,p,id){
     dc.innerHTML='<h2 style="font-size:14px;margin-bottom:10px">Beschreibung</h2><p class="small" style="color:var(--ink2)">'+esc(descText)+'</p>';
     box.appendChild(dc);
   }
-  box.appendChild(el('<p class="tiny muted" style="margin-top:14px">Beschreibung & Bilder bearbeitest du vorerst in Shopify.</p>'));
+}
+function downscaleToBase64(file, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file); const img=new Image();
+    img.onload=()=>{ URL.revokeObjectURL(url);
+      let w=img.naturalWidth, h=img.naturalHeight; const s=Math.min(1,(maxDim||2000)/Math.max(w,h)); w=Math.max(1,Math.round(w*s)); h=Math.max(1,Math.round(h*s));
+      const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(img,0,0,w,h);
+      resolve({ base64:c.toDataURL("image/jpeg",quality||0.85).split(",")[1], mime:"image/jpeg" });
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error("Bild konnte nicht gelesen werden")); };
+    img.src=url;
+  });
+}
+function pickAndUploadProductImage(id){
+  const inp=el('<input type="file" accept="image/*" style="display:none">'); document.body.appendChild(inp);
+  inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; inp.remove(); if(!f) return;
+    toast("Lade Bild hoch…");
+    try{ const r=await downscaleToBase64(f,2000,0.85);
+      await liveFetch("/admin/products/"+encodeURIComponent(id)+"/image",{method:"POST",body:JSON.stringify({imageBase64:r.base64, mimeType:r.mime})});
+      toast("Bild hinzugefügt ✓"); setTimeout(()=>{ if(parseRoute().name==="produkt") render(); }, 1200);
+    }catch(e){ toast((e&&e.message)||e,5000); }
+  };
+  inp.click();
 }
 function renderProductEdit(box,p,id){
   const card=el('<div class="card"></div>');
