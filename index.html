@@ -1578,6 +1578,11 @@ function viewOrders(app){
   const seg=el('<div class="seg"><button data-v="kanban" class="'+(state.ui.ordersView==="kanban"?"on":"")+'">Board</button><button data-v="liste" class="'+(state.ui.ordersView==="liste"?"on":"")+'">Liste</button></div>');
   ctl.appendChild(seg);
   wrap.appendChild(ctl);
+  if(liveConfigured()){
+    const dvBtn=el('<button class="btn btn-sm btn-primary" style="margin-bottom:10px">+ Direktverkauf</button>');
+    dvBtn.onclick=()=>openDraftOrderModal();
+    wrap.appendChild(dvBtn);
+  }
   // Kategorie-Chips (Filter, ehem. Dashboard-Kacheln)
   const chips=el('<div class="chip-row"></div>');
   chips.innerHTML='<button class="f-chip'+(!state.ui.ordersFilter?" on":"")+'" data-c="">Alle</button>'+
@@ -1781,6 +1786,41 @@ function openCustomerEdit(cu, onDone){
       closeModal(); toast("Kunde gespeichert ✓"); if(onDone) onDone();
     }catch(e){ yes.disabled=false; yes.textContent="Speichern"; toast((e&&e.message)||e,5000); }
   };
+}
+function openDraftOrderModal(){
+  const m=showModal('<h2 style="font-size:15px">Direktverkauf</h2><div id="dv-body"><p class="tiny muted">Lade Produkte… <span class="spin"></span></p></div>');
+  const body=m.querySelector("#dv-body");
+  liveFetch("/admin/products").then(data=>{
+    const products=(data.products||[]).filter(x=>x.status!=="archived");
+    if(!products.length){ body.innerHTML='<p class="small">Keine Produkte gefunden.</p><div class="modal-btns"><button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>'; return; }
+    body.innerHTML=''
+      +'<label class="field"><span>Produkt</span><select id="dv-prod">'+products.map(pp=>'<option value="'+esc(pp.id)+'">'+esc(pp.title)+'</option>').join("")+'</select></label>'
+      +'<label class="field"><span>Variante</span><select id="dv-var"><option value="">Lade…</option></select></label>'
+      +'<label class="field"><span>Menge</span><input type="number" id="dv-qty" min="1" step="1" value="1"></label>'
+      +'<label class="field"><span>Kunden-E-Mail (optional)</span><input type="email" id="dv-email" placeholder="kunde@…" autocomplete="off"></label>'
+      +'<label class="field"><span>Notiz (optional)</span><input type="text" id="dv-note" placeholder="z. B. Direktverkauf Instagram"></label>'
+      +'<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Bezahllink erstellen</button></div>';
+    const prodSel=body.querySelector("#dv-prod"), varSel=body.querySelector("#dv-var");
+    const loadVariants=(pid)=>{ varSel.innerHTML='<option value="">Lade…</option>'; liveFetch("/admin/products/"+encodeURIComponent(pid)).then(r=>{ const vs=(r.product&&r.product.variants)||[]; varSel.innerHTML=vs.length?vs.map(v=>'<option value="'+esc(v.id)+'">'+esc((v.title||"—")+(v.price!=null?" — "+fmtMoney(v.price):""))+'</option>').join(""):'<option value="">Keine Varianten</option>'; }).catch(()=>{ varSel.innerHTML='<option value="">Fehler beim Laden</option>'; }); };
+    loadVariants(prodSel.value); prodSel.onchange=()=>loadVariants(prodSel.value);
+    body.querySelector('[data-x=no]').onclick=()=>closeModal();
+    body.querySelector('[data-x=yes]').onclick=async()=>{
+      const variantId=varSel.value, qty=num(body.querySelector("#dv-qty").value,1);
+      if(!variantId){ toast("Bitte Variante wählen"); return; }
+      if(!(qty>0)){ toast("Menge muss größer als 0 sein"); return; }
+      const email=(body.querySelector("#dv-email").value||"").trim(), note=(body.querySelector("#dv-note").value||"").trim();
+      const yes=body.querySelector('[data-x=yes]'); yes.disabled=true; yes.innerHTML='Erstelle… <span class="spin"></span>';
+      try{
+        const res=await liveFetch("/admin/draft-orders",{method:"POST",body:JSON.stringify({lineItems:[{variantId, quantity:qty}], email:email||undefined, note:note||undefined})});
+        const d=res.draft||{};
+        body.innerHTML='<h3 style="font-size:14px;margin-bottom:10px">Bestellung angelegt ✓</h3>'
+          +kv("Bestellung", esc(d.name||"—"))+kv("Betrag", esc(d.total!=null?fmtMoney(d.total,d.currency):"—"))
+          +'<label class="field" style="margin-top:12px"><span>Bezahllink (an Kunden schicken)</span><input type="text" id="dv-link" readonly value="'+esc(d.invoiceUrl||"")+'"></label>'
+          +'<div class="modal-btns"><button class="btn btn-ghost" data-x="copy">Link kopieren</button><a class="btn btn-ghost" href="'+safeUrl(d.invoiceUrl||"#")+'" target="_blank" rel="noopener">Öffnen ↗</a><button class="btn btn-primary" onclick="closeModal()">Fertig</button></div>';
+        const cp=body.querySelector('[data-x=copy]'); if(cp) cp.onclick=()=>{ copyText(d.invoiceUrl||""); toast("Link kopiert"); };
+      }catch(e){ yes.disabled=false; yes.textContent="Bezahllink erstellen"; toast((e&&e.message)||e,5000); }
+    };
+  }).catch(e=>{ body.innerHTML='<p class="small" style="color:var(--danger)">'+esc((e&&e.message)||e)+'</p><div class="modal-btns"><button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>'; });
 }
 function openRefundModal(o){
   const m=showModal('<h2 style="font-size:15px">Erstattung — '+esc(o.name)+'</h2><div id="rf-body"><p class="tiny muted">Lade erstattbaren Betrag… <span class="spin"></span></p></div>');
