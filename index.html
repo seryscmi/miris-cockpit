@@ -1772,17 +1772,27 @@ function viewOrderDetail(app,name){
   app.appendChild(wrap);
 }
 function openCustomerEdit(cu, onDone){
+  const a=cu.defaultAddress||{};
   const m=showModal('<h2 style="font-size:15px">'+esc(cu.name||cu.email||"Kunde")+'</h2>'
     +'<label class="field"><span>Tags (Komma-getrennt)</span><input type="text" id="cu-tags" value="'+esc((cu.tags||[]).join(", "))+'" placeholder="VIP, Stammkunde"></label>'
     +'<label class="field"><span>Interne Notiz</span><textarea id="cu-note" rows="3">'+esc(cu.note||"")+'</textarea></label>'
+    +'<h3 style="margin-top:4px">Adresse</h3>'
+    +'<div class="row" style="gap:8px"><label class="field" style="flex:1;margin:0"><span>Vorname</span><input type="text" id="cu-fn" value="'+esc(a.firstName||"")+'"></label><label class="field" style="flex:1;margin:0"><span>Nachname</span><input type="text" id="cu-ln" value="'+esc(a.lastName||"")+'"></label></div>'
+    +'<label class="field" style="margin-top:10px"><span>Straße & Nr.</span><input type="text" id="cu-a1" value="'+esc(a.address1||"")+'"></label>'
+    +'<div class="row" style="gap:8px"><label class="field" style="flex:0 0 34%;margin:0"><span>PLZ</span><input type="text" id="cu-zip" value="'+esc(a.zip||"")+'"></label><label class="field" style="flex:1;margin:0"><span>Ort</span><input type="text" id="cu-city" value="'+esc(a.city||"")+'"></label></div>'
+    +'<div class="row" style="gap:8px;margin-top:10px"><label class="field" style="flex:1;margin:0"><span>Land</span><input type="text" id="cu-country" value="'+esc(a.country||"")+'"></label><label class="field" style="flex:1;margin:0"><span>Telefon</span><input type="text" id="cu-phone" value="'+esc(a.phone||"")+'"></label></div>'
     +'<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="yes">Speichern</button></div>');
   m.querySelector('[data-x=no]').onclick=()=>closeModal();
   m.querySelector('[data-x=yes]').onclick=async()=>{
-    const tags=(m.querySelector("#cu-tags").value||"").split(",").map(t=>t.trim()).filter(Boolean);
-    const note=(m.querySelector("#cu-note").value||"").trim();
+    const g=(id)=>(m.querySelector(id).value||"").trim();
+    const tags=g("#cu-tags").split(",").map(t=>t.trim()).filter(Boolean);
+    const note=g("#cu-note");
+    const address={ firstName:g("#cu-fn"), lastName:g("#cu-ln"), address1:g("#cu-a1"), zip:g("#cu-zip"), city:g("#cu-city"), country:g("#cu-country"), phone:g("#cu-phone") };
+    const body={ tags, note };
+    if([address.firstName,address.lastName,address.address1,address.zip,address.city,address.country,address.phone].some(v=>v)){ if(a.id) address.id=a.id; body.address=address; }
     const yes=m.querySelector('[data-x=yes]'); yes.disabled=true; yes.innerHTML='Speichere… <span class="spin"></span>';
     try{
-      await liveFetch("/admin/customers/"+encodeURIComponent(cu.id),{method:"PATCH",body:JSON.stringify({tags, note})});
+      await liveFetch("/admin/customers/"+encodeURIComponent(cu.id),{method:"PATCH",body:JSON.stringify(body)});
       closeModal(); toast("Kunde gespeichert ✓"); if(onDone) onDone();
     }catch(e){ yes.disabled=false; yes.textContent="Speichern"; toast((e&&e.message)||e,5000); }
   };
