@@ -374,7 +374,7 @@ const SCHEMA_VERSION = 1;
 const K = {
   meta:"miris.meta", settings:"miris.settings", orders:"miris.orders",
   anliegen:"miris.anliegen", gaps:"miris.gaps", images:"miris.images",
-  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails", bankReview:"miris.bankReview", systemData:"miris.systemData", ziele:"miris.ziele"
+  days:"miris.days", importlog:"miris.importlog", dismissed:"miris.dismissed", sentMails:"miris.sentMails", bankReview:"miris.bankReview", systemData:"miris.systemData"
 };
 const DEFAULT_SETTINGS = {
   apiKey:"", model:"claude-opus-4-8", backendUrl:"", adminToken:"",
@@ -503,7 +503,6 @@ const state = {
   sentMails:{},   // Sendeprotokoll je Kunde (nur lokal; Klaviyo ist die autoritative Historie)
   bankReview:[],  // Zahlungseingänge zur manuellen Prüfung (Server-Wahrheit, gespiegelt)
   systemData:null, // System-Landkarte + Abo-Kosten + Margen-Rechner (lokal editierbar)
-  ziele:null,      // Launch-Fahrplan + Wochenziele + Produktiv-Liste (Seeds im Code, Haken lokal)
   bankStatus:null,// letzter Bank-Status (RAM-Spiegel; im importlog gehalten)
   ui:{ ordersView:"kanban", ordersFilter:"", ordersQuery:"", anliegenFilter:"alle", gapsFilter:"alle", calMonth:null,
        kundenQuery:"", chatQuery:"", chatFrom:"", chatTo:"", chatResults:null }   // Chats nur im RAM (Datenschutz)
@@ -525,7 +524,6 @@ function loadState(){
   const sm = Store.get(K.sentMails,{}); state.sentMails = (sm && typeof sm==="object" && !Array.isArray(sm)) ? sm : {};
   const brv = Store.get(K.bankReview,[]); state.bankReview = Array.isArray(brv) ? brv : [];
   const syd = Store.get(K.systemData,null); state.systemData = (syd && typeof syd==="object") ? syd : null;
-  const zl = Store.get(K.ziele,null); state.ziele = (zl && typeof zl==="object") ? zl : null;
   // Speicher-Hygiene: Altlasten automatisch ausmisten
   try{
     const now=Date.now(); let prunedI=0, prunedD=0;
@@ -552,7 +550,6 @@ function saveImportlog(){ persist(["importlog"]); } function saveDismissed(){ pe
 function saveSentMails(){ persist(["sentMails"]); }
 function saveBankReview(){ persist(["bankReview"]); }
 function saveSystemData(){ persist(["systemData"]); }
-function saveZiele(){ persist(["ziele"]); }
 
 /* ---------- Helfer ---------- */
 function uid(){ return Date.now().toString(36)+"."+Math.random().toString(36).slice(2,8); }
@@ -903,7 +900,7 @@ function renderChrome(activeName){
   const rBtn=document.getElementById("tb-sync"); if(rBtn){ rBtn.onclick=()=>{ if(liveConfigured()) doLiveSync(); else nav("#/import"); }; rBtn.classList.toggle("spinning",!!state.ui.syncing); }
   // Desktop-Seitenleiste (mobil ersetzt der Startbildschirm die Navigation)
   const side=document.getElementById("sidenav");
-  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0), ziele:openWeekGoalsCount() };
+  const counts={ anliegen:openAnliegenCount(), dsgvo:openImagesCount(), wissensluecken:openGapsCount(), bestellungen:mahnungFaelligCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0) };
   side.innerHTML=NAV_ITEMS.map(it=>{
     const active=(it.name===activeName)||(activeName==="bestellung"&&it.name==="bestellungen")||(activeName==="produkt"&&it.name==="produkte")||(activeName==="kunde"&&it.name==="kunden")||(activeName==="tag"&&it.name==="kalender");
     const c=counts[it.name]; const badge=c?'<span class="n-badge">'+c+'</span>':"";
@@ -933,11 +930,11 @@ function pageHead(title,sub){ return '<div class="page-head"><h1>'+esc(title)+'<
    ====================================================================== */
 function viewHome(app){
   const wrap=el('<div></div>');
-  const counts={ bestellungen:mahnungFaelligCount(), anliegen:openAnliegenCount(), wissensluecken:openGapsCount(), dsgvo:openImagesCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0), ziele:openWeekGoalsCount() };
+  const counts={ bestellungen:mahnungFaelligCount(), anliegen:openAnliegenCount(), wissensluecken:openGapsCount(), dsgvo:openImagesCount(), bank:(Array.isArray(state.bankReview)?state.bankReview.length:0) };
   // Shopify-artige Bereiche
   const groups=[
     ["Fokus",[
-      {name:"ziele",label:"Ziele & Fahrplan"},
+      {name:"ziele",label:"Ziele"},
     ]],
     ["Verkauf",[
       {name:"bestellungen",label:"Bestellungen"},
@@ -2712,7 +2709,7 @@ function viewSystem(app){
   const costC=el('<div class="card"></div>');
   costC.innerHTML='<div class="row"><h2 style="font-size:14px">Fixkosten</h2><span class="spacer"></span><b id="abo-sum" style="font-variant-numeric:tabular-nums"></b></div>';
   const listWrap=el('<div id="fix-list"></div>'); costC.appendChild(listWrap);
-  const emptyHint=el('<p class="tiny muted" style="margin:10px 0">Noch keine Fixkosten. Tippe unten auf <b>+ Fixkosten</b>, trag Name und Betrag ein und wähle <b>monatlich</b> oder <b>jährlich</b>.</p>');
+  const emptyHint=el('<p class="tiny muted" style="margin:10px 0">Noch keine Fixkosten.</p>');
   const monthlyOf=x=>x.interval==="jahr"?num(x.eur,0)/12:num(x.eur,0);
   const recalcSum=()=>{ const sum=sd.abos.reduce((a,x)=>a+monthlyOf(x),0); const el2=costC.querySelector("#abo-sum"); if(el2) el2.textContent=fmtMoney(sum)+" / Mon · "+fmtMoney(sum*12)+" / Jahr"; return sum; };
   function renderFixRow(row){
@@ -2736,7 +2733,6 @@ function viewSystem(app){
   const addB=el('<button class="btn btn-sm btn-block" style="margin-top:14px">+ Fixkosten</button>');
   addB.onclick=()=>{ const row={name:"",eur:0,interval:"monat"}; sd.abos.push(row); if(sd.abos.length===1) listWrap.innerHTML=""; const rowEl=renderFixRow(row); listWrap.appendChild(rowEl); recalcSum(); recompute(); saveSystemDataSoon(); const inp=rowEl.querySelector('input[type=text]'); if(inp) inp.focus(); };
   costC.appendChild(addB);
-  costC.appendChild(el('<p class="tiny muted" style="margin:12px 0 0">Manche Kosten sind monatlich, manche jährlich – wähl es pro Posten. Jährliches wird für die Summe automatisch auf den Monat umgerechnet. Anthropic (KI) ist nutzungsabhängig, kein Fixkosten-Abo.</p>'));
   wrap.appendChild(costC);
 
   // 3) Margen-Rechner
@@ -2762,175 +2758,12 @@ function viewSystem(app){
   app.appendChild(wrap);
 }
 
-/* ======================================================================
-   Ziele — Launch-Fahrplan, Wochenziele, Produktiv-Liste
-   Seeds im Code (stabile IDs); Haken/Eigenes in localStorage (K.ziele).
-   Seed-Updates kommen per Deploy, der Fortschritt des Nutzers bleibt.
-   ====================================================================== */
-const ZIELE_PHASEN=[
-  {id:"recht",title:"Recht & Pflicht",hint:"Muss vor dem Launch komplett sein.",tasks:[
-    {id:"r-est",label:"ESt 2025: Fristverlängerung beantragen (Frist 31.07.!)"},
-    {id:"r-hb",label:"Händlerbund: Impressum, AGB, Widerruf, Versand-/Zahlungsinfo generieren"},
-    {id:"r-shop",label:"Rechtstexte in Shopify einpflegen (Policies + Footer-Menü) und in 07/rechtstexte ablegen"},
-    {id:"r-cookie",label:"Cookie-Banner/Consent aktivieren (deutsche Texte)"},
-    {id:"r-ds",label:"Datenschutz: Platzhalter füllen + Prüfung Augenfotos (Art. 9)"},
-    {id:"r-dsfa",label:"DSFA ausfüllen + AVVs ablegen (Shopify, Anthropic, Cloudinary, Klaviyo, Render, Neon)"},
-    {id:"r-doi",label:"Klaviyo E-Mail-Liste auf Double-Opt-in umstellen"},
-    {id:"r-dpma",label:"Marke: DPMA-Recherche + Anmeldung (~290 EUR) — siehe 07/marke-anmeldung/STATUS.md"},
-  ]},
-  {id:"shop",title:"Shop startklar",tasks:[
-    {id:"s-mcp",label:"Shopify-Connector in claude.ai neu autorisieren"},
-    {id:"s-audit",label:"Live-Audit: Seiten, Menüs, Policies, Versandzonen, Zahlarten, Sprachen"},
-    {id:"s-theme",label:"theme-aktuell als Preview komplett durchtesten (Wizard, Chat, Start-Seite)"},
-    {id:"s-quickbuy",label:"Quick-Buy fürs Set deaktivieren (legt sonst Set ohne Angaben in den Warenkorb)"},
-    {id:"s-start",label:"Start-Seite füllen + FAQ/Mary-Links umbiegen + 301-Redirect"},
-    {id:"s-content",label:"Über-uns-Seite + Größentabelle anlegen"},
-    {id:"s-publish",label:"theme-aktuell veröffentlichen"},
-    {id:"s-test",label:"Testbestellung auf .de und .eu komplett durchspielen (bis zu allen Mails)"},
-  ]},
-  {id:"produkt",title:"Verpackung & Produkt",tasks:[
-    {id:"v-proof",label:"Verpackung: Print-Proof/Farbfreigabe einholen + in 04 ablegen"},
-    {id:"v-order",label:"Verpackung bestellen + Lieferzeit dokumentieren"},
-    {id:"v-beileger",label:"Beileger gestalten: Einfädel-Anleitung, Danke-Karte, Pflegehinweise"},
-    {id:"v-montage",label:"Montage-Anleitung (Verbinder/Madenschraube) als Seite oder PDF"},
-    {id:"v-kalk",label:"Kalkulation mit Ist-Werten füllen — Preise 49,99/79,99 gegen echte Kosten prüfen"},
-  ]},
-  {id:"marketing",title:"Content & Marketing",hint:"Beste Nutzung der Wartezeit — organische Reichweite braucht Monate Vorlauf.",tasks:[
-    {id:"m-accounts",label:"TikTok- + Instagram-Konto für M.IRIS anlegen"},
-    {id:"m-saeulen",label:"Content-Säulen festlegen (Herstellung, Iris-Wissen, Emotion/Geschenk, Gründerweg)"},
-    {id:"m-clips",label:"30+ Rohclips sammeln (Handy reicht — beim Arbeiten mitfilmen)"},
-    {id:"m-fotos",label:"Foto-Set kuratieren: Freisteller, Lifestyle, Detail, Verpackung, Größenvergleich"},
-    {id:"m-cart",label:"Klaviyo: Warenkorb-Abbruch-Flow bauen"},
-    {id:"m-welcome",label:"Klaviyo: Welcome-Serie ausbauen (auf Welcome-Rabatt aufsetzen)"},
-    {id:"m-review",label:"Klaviyo: Review-Anfrage nach Kauf"},
-    {id:"m-brand",label:"Brand-Guide-1-Pager (Farben, Fonts, Logo-Regeln, Ton) in 03 ablegen"},
-    {id:"m-spf",label:"E-Mail-Zustellbarkeit: SPF + DMARC für m-iris.de bei Google eintragen (Details: 06/ZUSTELLBARKEIT-Klaviyo.md)"},
-    {id:"m-transaktional",label:"BEIM LAUNCH: Klaviyo E-Mail-Plan buchen (~20$/Mon) + die 10 Service-Flows auf transaktional stellen → laufen dann über support.m-iris.de"},
-  ]},
-  {id:"launch",title:"Launch",hint:"Startkriterium: alle Phasen oben fertig + Verpackung lieferbar + 30 Clips bereit.",tasks:[
-    {id:"l-check",label:"Launch-Checkliste komplett durchgehen"},
-    {id:"l-soft",label:"Soft-Launch: erste 10 Bestellungen sauber abwickeln"},
-    {id:"l-push",label:"Organischer Push: 2 Wochen täglich posten"},
-    {id:"l-ads",label:"Ads-Test 10-20 EUR/Tag mit den besten organischen Creatives"},
-  ]},
-  {id:"backlog",title:"Ideen-Backlog (nach dem Launch)",tasks:[
-    {id:"b-gutschein",label:"Geschenkgutscheine (das Iris-Erlebnis verschenken)"},
-    {id:"b-karte",label:"Grußkarten-Option im Checkout"},
-    {id:"b-zertifikat",label:"Echtheits-/Unikat-Zertifikat pro Armband"},
-    {id:"b-express",label:"Express-Option"},
-    {id:"b-koop",label:"Kooperationen: Fotografen, Optiker, Iris-Fotostudios"},
-    {id:"b-repair",label:"Reparatur-Service prominenter bewerben (USP)"},
-  ]},
-];
-const ZIELE_PRODUKTIV_SEED=[
-  "Clips fürs Marketing filmen (Herstellung, Perlen, Verpackung)",
-  "Produktfotos schießen oder aussortieren",
-  "Verpackungs-Proof / Lieferanten-Nachricht prüfen",
-  "Belege ziehen und in 08_Buchhaltung ablegen",
-  "Content-Texte oder FAQ-Antworten ins Handy diktieren",
-  "Materialbestand zählen, Nachbestellung notieren",
-  "Einfädeln/Montage einmal selbst testen und dabei filmen",
-];
-function defaultZiele(){ return { v:1, done:{}, custom:[], weekKey:"", goals:[], weeks:{}, produktiv:null }; }
-function isoWeekKey(d){ const x=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const day=x.getUTCDay()||7; x.setUTCDate(x.getUTCDate()+4-day); const y=x.getUTCFullYear(); const week=Math.ceil(((x-Date.UTC(y,0,1))/86400000+1)/7); return y+"-W"+String(week).padStart(2,"0"); }
-function zieleState(){
-  if(!state.ziele || typeof state.ziele!=="object" || !state.ziele.v){ state.ziele=defaultZiele(); }
-  const z=state.ziele;
-  if(!z.done||typeof z.done!=="object"||Array.isArray(z.done)) z.done={};
-  if(!Array.isArray(z.custom)) z.custom=[];
-  if(!Array.isArray(z.goals)) z.goals=[];
-  if(!z.weeks||typeof z.weeks!=="object"||Array.isArray(z.weeks)) z.weeks={};
-  if(!Array.isArray(z.produktiv)) z.produktiv=ZIELE_PRODUKTIV_SEED.map(t=>({id:hashId(t),label:t}));
-  // Wochenwechsel: alte Woche archivieren, frisch starten
-  const wk=isoWeekKey(new Date());
-  if(z.weekKey && z.weekKey!==wk){ if(z.goals.length) z.weeks[z.weekKey]=z.goals; z.goals=[]; }
-  if(z.weekKey!==wk){ z.weekKey=wk; saveZiele(); }
-  return z;
-}
-function openWeekGoalsCount(){ try{ return zieleState().goals.filter(g=>!g.done).length; }catch(e){ return 0; } }
+/* Ziele — ein Blick: der nächste große Schritt. Von mir per Deploy aktuell gehalten. */
+const NEXT_STEP = "Rechtstexte über den Händlerbund erstellen (Impressum, AGB, Widerruf) und in Shopify einpflegen.";
 function viewZiele(app){
-  const z=zieleState();
-  const wrap=el('<div></div>'); wrap.innerHTML=pageHead("Ziele","Kleine Schritte, klare Richtung — dein Weg zum Launch.");
-
-  // 1) Wochenziele (max 3)
-  const wc=el('<div class="card"></div>');
-  wc.innerHTML='<div class="row"><h2 style="font-size:14px">Wochenziele</h2><span class="spacer"></span><span class="tiny muted">Woche '+esc(z.weekKey)+'</span></div><p class="tiny muted" style="margin:4px 0 6px">Maximal 3 — was diese Woche wirklich zählt. Montags neu setzen.</p>';
-  const wlist=el('<div></div>'); wc.appendChild(wlist);
-  function paintGoals(){
-    wlist.innerHTML="";
-    if(!z.goals.length) wlist.appendChild(el('<p class="tiny muted" style="margin:8px 0">Noch keine Ziele für diese Woche. Nimm dir 1-3 Aufgaben aus dem Fahrplan unten vor.</p>'));
-    z.goals.forEach(g=>{
-      const row=el('<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);cursor:pointer"><input type="checkbox" style="width:auto;margin-top:2px"'+(g.done?" checked":"")+'><span style="flex:1;'+(g.done?"text-decoration:line-through;color:var(--ink2)":"")+'">'+esc(g.label)+'</span></label>');
-      row.querySelector("input").onchange=(e)=>{ g.done=!!e.target.checked; saveZiele(); paintGoals(); renderChrome(parseRoute().name); };
-      const delB=el('<button class="btn btn-sm btn-ghost" style="font-size:16px;line-height:1;padding:2px 8px" title="Entfernen">×</button>');
-      delB.onclick=(e)=>{ e.preventDefault(); const i=z.goals.indexOf(g); if(i>=0) z.goals.splice(i,1); saveZiele(); paintGoals(); renderChrome(parseRoute().name); };
-      row.appendChild(delB); wlist.appendChild(row);
-    });
-  }
-  paintGoals();
-  const addRow=el('<div style="display:flex;gap:8px;margin-top:10px"><input type="text" placeholder="Neues Wochenziel …" style="flex:1"><button class="btn btn-sm">+</button></div>');
-  const addInp=addRow.querySelector("input"), addBtn=addRow.querySelector("button");
-  function addGoal(){ const t=addInp.value.trim(); if(!t) return; if(z.goals.length>=3){ toast("Maximal 3 Wochenziele — Fokus!"); return; } z.goals.push({id:uid(),label:str(t,200),done:false}); addInp.value=""; saveZiele(); paintGoals(); renderChrome(parseRoute().name); }
-  addBtn.onclick=addGoal; addInp.onkeydown=(e)=>{ if(e.key==="Enter") addGoal(); };
-  wc.appendChild(addRow);
-  const lastKeys=Object.keys(z.weeks).sort();
-  if(lastKeys.length){ const lk=lastKeys[lastKeys.length-1]; const lg=z.weeks[lk]||[]; const doneN=lg.filter(g=>g.done).length;
-    wc.appendChild(el('<p class="tiny muted" style="margin:10px 0 0">Letzte Woche ('+esc(lk)+'): '+doneN+' von '+lg.length+' geschafft.</p>')); }
-  wrap.appendChild(wc);
-
-  // 2) Produktiv-Liste — statt TikTok, waehrend Claude arbeitet
-  const pc=el('<div class="card"></div>');
-  pc.innerHTML='<div class="row"><h2 style="font-size:14px">Während Claude arbeitet</h2><span class="spacer"></span></div><p class="tiny muted" style="margin:4px 0 6px">Claude rechnet, du baust die Marke: Handy weglegen, EINEN Punkt nehmen (10-25 Min).</p>';
-  const pickB=el('<button class="btn btn-sm btn-primary" style="margin:4px 0 6px">Gib mir eine Aufgabe</button>');
-  pickB.onclick=()=>{ if(!z.produktiv.length){ toast("Liste ist leer"); return; } const it=z.produktiv[Math.floor(Math.random()*z.produktiv.length)]; toast("Jetzt: "+it.label,5000); };
-  pc.appendChild(pickB);
-  const plist=el('<div></div>'); pc.appendChild(plist);
-  function paintProduktiv(){
-    plist.innerHTML="";
-    z.produktiv.forEach(it=>{
-      const row=el('<div style="display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)"><span style="flex:1">'+esc(it.label)+'</span></div>');
-      const delB=el('<button class="btn btn-sm btn-ghost" style="font-size:16px;line-height:1;padding:2px 8px" title="Entfernen">×</button>');
-      delB.onclick=()=>{ const i=z.produktiv.indexOf(it); if(i>=0) z.produktiv.splice(i,1); saveZiele(); paintProduktiv(); };
-      row.appendChild(delB); plist.appendChild(row);
-    });
-  }
-  paintProduktiv();
-  const pAdd=el('<div style="display:flex;gap:8px;margin-top:10px"><input type="text" placeholder="Eigene Aufgabe …" style="flex:1"><button class="btn btn-sm">+</button></div>');
-  const pInp=pAdd.querySelector("input");
-  function addP(){ const t=pInp.value.trim(); if(!t) return; z.produktiv.push({id:uid(),label:str(t,200)}); pInp.value=""; saveZiele(); paintProduktiv(); }
-  pAdd.querySelector("button").onclick=addP; pInp.onkeydown=(e)=>{ if(e.key==="Enter") addP(); };
-  pc.appendChild(pAdd);
-  wrap.appendChild(pc);
-
-  // 3) Launch-Fahrplan — Phasen mit Fortschritt
-  ZIELE_PHASEN.forEach(ph=>{
-    const custom=z.custom.filter(c=>c.phase===ph.id);
-    const tasks=ph.tasks.concat(custom);
-    const doneN=tasks.filter(t=>!!z.done[t.id]).length;
-    const pct=tasks.length?Math.round(doneN/tasks.length*100):0;
-    const c=el('<div class="card"></div>');
-    c.innerHTML='<div class="row"><h2 style="font-size:14px">'+esc(ph.title)+'</h2><span class="spacer"></span><span class="tiny muted" style="font-variant-numeric:tabular-nums">'+doneN+'/'+tasks.length+'</span></div>'+
-      '<div style="height:3px;background:var(--line);margin:8px 0 2px"><i style="display:block;height:3px;background:var(--ink);width:'+pct+'%"></i></div>'+
-      (ph.hint?'<p class="tiny muted" style="margin:6px 0 0">'+esc(ph.hint)+'</p>':"");
-    const tl=el('<div style="margin-top:6px"></div>');
-    tasks.forEach(t=>{
-      const isCustom=!!t.custom;
-      const row=el('<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line);cursor:pointer"><input type="checkbox" style="width:auto;margin-top:2px"'+(z.done[t.id]?" checked":"")+'><span style="flex:1;'+(z.done[t.id]?"text-decoration:line-through;color:var(--ink2)":"")+'">'+esc(t.label)+'</span></label>');
-      row.querySelector("input").onchange=(e)=>{ if(e.target.checked) z.done[t.id]=Date.now(); else delete z.done[t.id]; saveZiele(); render(); };
-      if(isCustom){ const delB=el('<button class="btn btn-sm btn-ghost" style="font-size:16px;line-height:1;padding:2px 8px" title="Entfernen">×</button>');
-        delB.onclick=(e)=>{ e.preventDefault(); const i=z.custom.indexOf(t); if(i>=0) z.custom.splice(i,1); delete z.done[t.id]; saveZiele(); render(); };
-        row.appendChild(delB); }
-      tl.appendChild(row);
-    });
-    c.appendChild(tl);
-    const cAdd=el('<div style="display:flex;gap:8px;margin-top:10px"><input type="text" placeholder="Aufgabe ergänzen …" style="flex:1"><button class="btn btn-sm">+</button></div>');
-    const cInp=cAdd.querySelector("input");
-    function addC(){ const t=cInp.value.trim(); if(!t) return; z.custom.push({id:uid(),phase:ph.id,label:str(t,200),custom:true}); cInp.value=""; saveZiele(); render(); }
-    cAdd.querySelector("button").onclick=addC; cInp.onkeydown=(e)=>{ if(e.key==="Enter") addC(); };
-    c.appendChild(cAdd);
-    wrap.appendChild(c);
-  });
-
+  const wrap=el('<div></div>');
+  wrap.innerHTML='<div class="page-head"><h1>Nächster Schritt</h1></div>'+
+    '<div class="card"><p style="font-size:15px;line-height:1.55">'+esc(NEXT_STEP)+'</p></div>';
   app.appendChild(wrap);
 }
 
@@ -2987,7 +2820,7 @@ function exportBackup(){
   const dump={ schemaVersion:SCHEMA_VERSION, exportedAt:new Date().toISOString(),
     settings:Object.assign({},state.settings,{apiKey:"",adminToken:""}),
     orders:state.orders, anliegen:state.anliegen, gaps:state.gaps, images:state.images, days:state.days,
-    systemData:state.systemData, ziele:state.ziele };
+    systemData:state.systemData };
   const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="miris-cockpit-backup-"+todayStr()+".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   toast("Backup exportiert");
@@ -3000,9 +2833,8 @@ function importBackup(file){
     if(d.images) state.images=mapSanitize(d.images,sanitizeImage,"id");
     if(d.days) state.days=sanitizeDays(d.days);
     if(d.systemData && typeof d.systemData==="object" && Array.isArray(d.systemData.abos)) state.systemData=d.systemData;
-    if(d.ziele && typeof d.ziele==="object" && d.ziele.v) state.ziele=d.ziele;
     if(d.settings) state.settings=Object.assign({},state.settings,d.settings,{apiKey:state.settings.apiKey,adminToken:state.settings.adminToken});
-    persist(["orders","anliegen","gaps","images","days","settings","systemData","ziele"]); flushSaves(); toast("Backup importiert"); render();
+    persist(["orders","anliegen","gaps","images","days","settings","systemData"]); flushSaves(); toast("Backup importiert"); render();
   }catch(e){ toast("Ungültiges Backup",4000); } }; rd.readAsText(file);
 }
 
