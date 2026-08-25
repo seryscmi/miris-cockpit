@@ -387,7 +387,7 @@ const AI_MODELS = [
 // Kategorien in Lebenszyklus-Reihenfolge
 const CATS = [
   "Zahlung offen","Mahnung fällig","Reparatur","Farbvorschau offen",
-  "Vorschau gesendet – wartet auf Freigabe","Freigegeben – muss versendet werden",
+  "Vorschau gesendet – wartet auf Freigabe","Anpassung gewünscht","Freigegeben – muss versendet werden",
   "Versendet","Erledigt"
 ];
 const CAT_META = {
@@ -396,6 +396,7 @@ const CAT_META = {
   "Reparatur":{k:"info",ico:""},
   "Farbvorschau offen":{k:"warn",ico:""},
   "Vorschau gesendet – wartet auf Freigabe":{k:"info",ico:""},
+  "Anpassung gewünscht":{k:"danger",ico:""},
   "Freigegeben – muss versendet werden":{k:"ok",ico:""},
   "Versendet":{k:"muted",ico:""},
   "Erledigt":{k:"muted",ico:""}
@@ -615,8 +616,11 @@ function categorize(o, settings, now){
   // Set-Bestellung, bezahlt, unfulfilled → Farbvorschau-Lebenszyklus
   const approved = dec.indexOf("freigegeben")>=0 || appr==="versandbereit" || appr==="freigegeben";
   if(approved) return {primary:"Freigegeben – muss versendet werden",badges};
-  const revision = appr.indexOf("revision")>=0 || appr.indexOf("überarbeit")>=0 || dec.indexOf("revision")>=0 || dec.indexOf("änderung")>=0;
-  if(revision){ badges.push({t:"Überarbeitung",k:"warn"}); return {primary:"Farbvorschau offen",badges}; }
+  // Der Kunde hat auf die Vorschau geantwortet und eine Anpassung gewünscht.
+  // Die Vorschau-App schreibt dafür "anpassung_gewuenscht" in approval_status UND customer_decision
+  // (miris-preview-approval/app/routes/apps.vorschau.jsx). Frühere Schreibweisen bleiben als Fallback erkannt.
+  const wantsChange = /anpassung|revision|überarbeit|ueberarbeit|änderung|aenderung/.test(appr+" "+dec);
+  if(wantsChange) return {primary:"Anpassung gewünscht",badges};
   // Vorschau existiert/wurde gesendet → wartet auf Freigabe (unabhängig vom approval_status-Wortlaut)
   const sent = !!(m.preview_url||m.approval_url||m.preview_sent_at||L.previewSentAt);
   if(sent) return {primary:"Vorschau gesendet – wartet auf Freigabe",badges};
@@ -1400,7 +1404,8 @@ function viewDashboard(app){
     statChip(fmtMoney(rev.monat),"Umsatz Monat","#/bestellungen")+
     statChip(offen,"Offen","#/bestellungen")+
     statChip(openAnliegenCount(),"Inbox","#/anliegen")+
-    statChip((buckets["Farbvorschau offen"]||[]).length,"Vorschau offen","#/bestellungen");
+    statChip((buckets["Farbvorschau offen"]||[]).length,"Vorschau offen","#/bestellungen")+
+    ((buckets["Anpassung gewünscht"]||[]).length?statChip((buckets["Anpassung gewünscht"]||[]).length,"Anpassung","#/bestellungen"):"");
   wrap.appendChild(kp);
 
   // Aktions-Warteschlange — Karten nur wenn etwas ansteht
@@ -1449,6 +1454,17 @@ function viewDashboard(app){
   if(vor.length){ queued++;
     const c=queueCard("","Farbvorschau senden",vor.length);
     vor.slice(0,5).forEach(o=>c.appendChild(el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(o.customerName||"")+'</span></a><span class="badge warn">offen</span></div>')));
+    q.appendChild(c);
+  }
+
+  const anp=buckets["Anpassung gewünscht"]||[];
+  if(anp.length){ queued++;
+    const c=queueCard("","Anpassung gewünscht",anp.length);
+    anp.slice(0,5).forEach(o=>{
+      const w=String((o.miris&&o.miris.customer_feedback)||"").trim();
+      const sub=(w&&w!=="-")?(w.length>70?w.slice(0,70)+"…":w):(o.customerName||"");
+      c.appendChild(el('<div class="q-row"><a href="#/bestellung/'+encodeURIComponent(o.name)+'" class="q-main"><b>'+esc(o.name)+'</b> <span class="muted">'+esc(sub)+'</span></a><span class="badge danger">Wunsch offen</span></div>'));
+    });
     q.appendChild(c);
   }
 
@@ -1657,6 +1673,20 @@ function viewOrderDetail(app,name){
   wrap.innerHTML='<div class="page-head"><div class="row"><a class="btn btn-sm btn-ghost" href="#/bestellungen">‹ Zurück</a></div><h1 style="margin-top:10px">'+esc(o.name)+'</h1>'+
     '<p style="margin-top:4px">'+kundeLink(o.customerEmail,o.customerName)+' · '+esc(fmtMoney(o.totalPrice,o.currency))+' · '+esc(fmtDate(o.createdAt))+'</p>'+
     '<div class="row" style="margin-top:6px"><span class="badge '+(meta.k||"muted")+'">'+esc(primary)+'</span>'+badges.map(b=>'<span class="badge '+b.k+'">'+esc(b.t)+'</span>').join("")+'</div></div>';
+
+  // Anpassungswunsch — steht vor allem anderen, weil hier ein Kunde auf eine Antwort wartet
+  (function(){
+    const wish=String(m.customer_feedback||"").trim();
+    const hasWish=wish && wish!=="-";
+    const wantsChange=/anpassung|revision|überarbeit|ueberarbeit|änderung|aenderung/.test(normStr(m.approval_status)+" "+normStr(m.customer_decision));
+    if(!wantsChange && !hasWish) return;
+    const wc=el('<div class="card"></div>');
+    wc.innerHTML='<div class="row"><h2 style="font-size:14px;margin-bottom:8px">Das wünscht sich der Kunde</h2><span class="spacer"></span><span class="badge danger">Anpassung gewünscht</span></div>'+
+      '<div style="white-space:pre-wrap;font-size:15px;line-height:1.5;border-left:2px solid var(--line2);padding-left:12px">'+
+      esc(hasWish?wish:"Der Kunde hat eine Anpassung angefordert, aber keinen Text hinterlassen.")+'</div>'+
+      (m.preview_sent_at?'<div class="muted tiny" style="margin-top:8px">Vorschau gesendet am '+esc(fmtDate(m.preview_sent_at))+'</div>':"");
+    wrap.appendChild(wc);
+  })();
 
   // Stammdaten
   const info=el('<div class="card"></div>');
@@ -2365,8 +2395,13 @@ function openMailModal({email, firstName, orderName}){
 
 /* ---------- Farbvorschau hochladen + senden ---------- */
 function openPreviewUpload(o){
+  const mfs=o.miris||{};
+  const wish=String(mfs.customer_feedback||"").trim();
+  const wishHtml=(wish&&wish!=="-")
+    ? '<div style="margin:10px 0;padding:10px 12px;border-left:2px solid var(--line2);white-space:pre-wrap;font-size:14px"><b>Das wünscht sich der Kunde:</b><br>'+esc(wish)+'</div>'
+    : '';
   const m=showModal('<h2>Farbvorschau senden – '+esc(o.name)+'</h2>'+
-    
+    wishHtml+
     '<input type="file" id="pv-file" accept="image/*" style="margin:12px 0">'+
     '<div id="pv-prev" style="display:none;margin-bottom:10px"><img id="pv-img" style="max-width:100%;max-height:220px;border:1px solid var(--line2)"></div>'+
     '<div class="modal-btns"><button class="btn btn-ghost" data-x="no">Abbrechen</button><button class="btn btn-primary" data-x="send" disabled>Hochladen & senden</button></div>',{sticky:true});
@@ -2802,7 +2837,7 @@ function viewSettings(app){
   const expB=el('<button class="btn btn-ghost">Backup exportieren</button>'); expB.onclick=exportBackup; data.appendChild(expB);
   const impB=el('<label class="btn btn-ghost" style="margin-left:8px">Backup importieren<input type="file" accept=".json" style="display:none"></label>'); impB.querySelector("input").onchange=(e)=>importBackup(e.target.files[0]); data.appendChild(impB);
   const demoB=el('<button class="btn btn-ghost" style="margin-left:8px">Demo-Daten entfernen</button>');
-  demoB.onclick=()=>{ let n=0; ["B2001","B2002","B2003","B2004","B2005","B2006"].forEach(k=>{ if(state.orders[k]){ delete state.orders[k]; n++; } });
+  demoB.onclick=()=>{ let n=0; ["B2001","B2002","B2003","B2004","B2005","B2006","B2007"].forEach(k=>{ if(state.orders[k]){ delete state.orders[k]; n++; } });
     Object.keys(state.anliegen).forEach(id=>{ const a=state.anliegen[id]; if(/example\.com$/.test(a.customerEmail||"")){ delete state.anliegen[id]; n++; } });
     Object.keys(state.images).forEach(id=>{ const im=state.images[id]; if(/^B20\d\d$/.test(im.orderName||"")||/demo\d?\.(jpg|png)/.test(im.imageUrl||"")){ delete state.images[id]; n++; } });
     persist(["orders","anliegen","images"]); toast(n+" Demo-Einträge entfernt"); render(); };
@@ -2869,6 +2904,7 @@ function seedDemo(){
     { name:"B2003", customerName:"Aylin Kaya", customerEmail:"aylin.kaya@example.com", createdAt:d(4), totalPrice:29.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Grau","Auge 1 Bild":"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908441/kunden-augenfotos/demo1.jpg"}}], miris:{approval_status:"gesendet",preview_url:"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908617/miris/farbvorschau/demo.jpg",approval_url:"https://m-iris.de/apps/vorschau?order=demo",preview_sent_at:d(3)}, adminUrl:"" },
     { name:"B2004", customerName:"Sophie Braun", customerEmail:"sophie.b@example.com", createdAt:d(6), totalPrice:29.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Blau","Auge 1 Bild":"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908441/kunden-augenfotos/demo2.jpg"}}], miris:{approval_status:"versandbereit",customer_decision:"automatisch_freigegeben",preview_url:"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908617/miris/farbvorschau/demo2.jpg"}, adminUrl:"" },
     { name:"B2005", customerName:"Michail S.", customerEmail:"m.s@example.com", createdAt:d(9), totalPrice:0, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS Reparaturservice",quantity:1,properties:{}}], miris:{repair_status:"kostenlos_bestellung_erstellt",repair_code:"REP-DEMO-01"}, adminUrl:"" },
+    { name:"B2007", customerName:"Nils Brandt", customerEmail:"nils.brandt@example.com", createdAt:d(3), totalPrice:49.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"UNFULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:2,properties:{"Augenfarbe 1 Beschreibung":"Dunkelbraun","Augenfarbe 2 Beschreibung":"Blaugrau","Buchstabe Armband 1":"N"}}], miris:{approval_status:"anpassung_gewuenscht",customer_decision:"anpassung_gewuenscht",customer_feedback:"Die braunen Perlen sind mir zu dunkel geraten. Ihre Augen haben viel mehr Goldton drin. Könnt ihr da noch etwas Helleres finden?",preview_url:"https://res.cloudinary.com/dg3k6nvwj/image/upload/v1782908617/miris/farbvorschau/demo.jpg",preview_sent_at:d(1)}, adminUrl:"" },
     { name:"B2006", customerName:"Emma Fischer", customerEmail:"emma.f@example.com", createdAt:d(20), totalPrice:29.99, currency:"EUR", financialStatus:"PAID", fulfillmentStatus:"FULFILLED", lineItems:[{title:"M.IRIS - Set",quantity:1,properties:{"Augenfarbe 1 Beschreibung":"Grün","Buchstabe Armband 1":"E"}}], miris:{approval_status:"versandbereit",customer_decision:"freigegeben"}, adminUrl:"" }
   ];
   mergeOrders(orders);
